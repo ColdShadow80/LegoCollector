@@ -19,6 +19,15 @@ cd lego-tracker
 npm install
 ```
 
+2.1. Instale as bibliotecas adicionais para a atualização em batch no primeiro arranque:
+(As bibliotecas zlib e fs já são nativas do Node.js)
+
+```bash
+npm install csv-parser
+```
+
+
+
 ## 3. Crie o seu ficheiro .env a partir do exemplo e preencha a chave da API:
 
 ```bash
