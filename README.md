@@ -26,6 +26,11 @@ npm install
 npm install csv-parser
 ```
 
+2.2. Rode o script de importação
+
+```bash
+node setup_bulk.js
+```
 
 
 ## 3. Crie o seu ficheiro .env a partir do exemplo e preencha a chave da API:
