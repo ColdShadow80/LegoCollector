@@ -34,8 +34,6 @@ npm run sync
 ```
 
 ## 5. Inicie o site:
-Certifique-se que colocou sua API Key no arquivo .env.
-Rode o script de sincronização (pode demorar um pouco):
 
 ```bash
 npm start
