@@ -5,56 +5,75 @@ const db = require('./database');
 const API_KEY = process.env.REBRICKABLE_API_KEY;
 const BASE_URL = 'https://rebrickable.com/api/v3/lego';
 
-async function syncThemes() {
-    console.log('Baixando Temas...');
-    try {
-        const res = await axios.get(`${BASE_URL}/themes/?page_size=1000`, {
-            headers: { 'Authorization': `key ${API_KEY}` }
-        });
-        
-        const stmt = db.prepare("INSERT OR REPLACE INTO themes (id, name, parent_id) VALUES (?, ?, ?)");
-        res.data.results.forEach(theme => {
-            stmt.run(theme.id, theme.name, theme.parent_id);
-        });
-        stmt.finalize();
-        console.log('Temas atualizados.');
-    } catch (error) {
-        console.error('Erro temas:', error.message);
-    }
-}
+// CONFIGURAÇÃO: Começar a buscar apenas a partir deste ano
+const MIN_YEAR = 2026; 
 
 async function syncSets(year) {
-    console.log(`Baixando Sets de ${year}...`);
+    console.log(`📡 A verificar API por novos sets de ${year}...`);
+    let nextUrl = `${BASE_URL}/sets/?min_year=${year}&max_year=${year}&page_size=200`;
+
     try {
-        // Busca sets do ano especifico
-        const res = await axios.get(`${BASE_URL}/sets/?min_year=${year}&max_year=${year}&page_size=300`, {
-            headers: { 'Authorization': `key ${API_KEY}` }
-        });
+        // Loop para lidar com paginação da API (caso existam mais de 200 sets num ano)
+        while (nextUrl) {
+            const res = await axios.get(nextUrl, {
+                headers: { 'Authorization': `key ${API_KEY}` }
+            });
 
-        const stmt = db.prepare(`
-            INSERT INTO sets (set_num, name, year, theme_id, num_parts, img_url, price_eur) 
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(set_num) DO UPDATE SET 
-            name=excluded.name, img_url=excluded.img_url
-        `);
+            // Prepara a transação para ser rápido
+            db.serialize(() => {
+                db.run("BEGIN TRANSACTION");
+                
+                const stmt = db.prepare(`
+                    INSERT INTO sets (set_num, name, year, theme_id, num_parts, img_url, eol_status) 
+                    VALUES (?, ?, ?, ?, ?, ?, 'Active')
+                    ON CONFLICT(set_num) DO UPDATE SET 
+                    name=excluded.name, 
+                    img_url=excluded.img_url, 
+                    num_parts=excluded.num_parts
+                `);
 
-        // Nota: Rebrickable nem sempre tem preço em EUR direto na lista, simplifiquei para 0 se nulo
-        res.data.results.forEach(set => {
-            stmt.run(set.set_num, set.name, set.year, set.theme_id, set.num_parts, set.set_img_url, 0);
-        });
-        stmt.finalize();
-        console.log(`Sets de ${year} processados.`);
+                res.data.results.forEach(set => {
+                    // Só atualizamos/inserimos se tivermos dados válidos
+                    if (set.set_num && set.name) {
+                        stmt.run(
+                            set.set_num, 
+                            set.name, 
+                            set.year, 
+                            set.theme_id, 
+                            set.num_parts, 
+                            set.set_img_url
+                        );
+                    }
+                });
+
+                stmt.finalize();
+                db.run("COMMIT");
+            });
+
+            // Passa para a próxima página da API (se houver)
+            nextUrl = res.data.next;
+            if (nextUrl) console.log(`   ...a carregar mais páginas de ${year}`);
+        }
+        console.log(`✅ Sets de ${year} sincronizados com sucesso.`);
         
     } catch (error) {
-        console.error('Erro sets:', error.message);
+        if (error.response && error.response.status === 429) {
+            console.error("⚠️ Limite da API atingido (Rate Limit). Tente mais tarde.");
+        } else {
+            console.error(`❌ Erro ao sincronizar ${year}:`, error.message);
+        }
     }
 }
 
-// Execução sequencial
 (async () => {
-    await syncThemes();
-    await syncSets(2023); // Pode alterar para loopar vários anos
-    await syncSets(2024);
-    await syncSets(2025);
-    console.log("Sincronização concluída.");
+    const currentYear = new Date().getFullYear();
+    const startYear = MIN_YEAR;
+    
+    // Sincroniza do ano definido (2026) até ao ano seguinte (para apanhar pré-lançamentos)
+    // Como estamos em 2026, ele vai verificar 2026 e 2027.
+    for (let y = startYear; y <= currentYear + 1; y++) {
+        await syncSets(y);
+    }
+    
+    console.log("🏁 Sincronização incremental concluída.");
 })();
