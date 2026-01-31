@@ -48,12 +48,14 @@ app.post('/api/toggle-owned', (req, res) => {
     });
 });
 
-// Cron Job: Roda toda Segunda-feira às 03:00 da manhã para atualizar dados
-cron.schedule('0 3 * * 1', () => {
-    console.log("Rodando tarefa agendada...");
-    // Aqui chamaria a função do arquivo sync.js
+// Cron Job: Todos os dias às 04:00 da manhã, dado que a carga é muito leve (apenas sets novos)
+cron.schedule('0 4 * * *', () => {
+    console.log("Iniciando verificação diária de novos sets...");
     const { exec } = require('child_process');
-    exec('node sync.js');
+    exec('node sync.js', (error, stdout, stderr) => {
+        if (error) console.error(`Erro no cron: ${error}`);
+        if (stdout) console.log(stdout);
+    });
 });
 
 const PORT = process.env.PORT || 3000;
