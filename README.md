@@ -1,5 +1,8 @@
 # LegoCollector
 
+```bash
+git clone https://github.com/ColdShadow80/LegoCollector.git
+```
 
 ## 1. Pré-requisitos
 
@@ -9,8 +12,6 @@ Instale o **Node.js** e o **Git**:
 sudo apt update
 sudo apt install nodejs npm git -y
 
-mkdir lego-tracker
-cd lego-tracker
 ```
 
 ## 2. Instale as bibliotecas:
@@ -19,15 +20,30 @@ cd lego-tracker
 npm install
 ```
 
+2.1. Instale as bibliotecas adicionais para a atualização em batch no primeiro arranque:
+(As bibliotecas zlib e fs já são nativas do Node.js)
+
+```bash
+npm install csv-parser axios sqlite3
+```
+
 ## 3. Crie o seu ficheiro .env a partir do exemplo e preencha a chave da API:
 
 ```bash
-TO BE DONE
+cp .env.example .env
 ```
 
-## 4. Obtenha os dados iniciais:
+## 4.1 Obtenha os dados iniciais:
 Certifique-se que colocou sua API Key no arquivo .env.
-Rode o script de sincronização (pode demorar um pouco):
+
+
+## 4.1 Rode o script de importação inicial
+
+```bash
+node setup_bulk.js
+```
+
+## 4.2 OPCIONAL - Rode o script de sincronização adicional (apenas para obter dados recentes (pode demorar um pouco):
 
 ```bash
 npm run sync
