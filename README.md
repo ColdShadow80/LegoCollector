@@ -24,7 +24,7 @@ npm install
 (As bibliotecas zlib e fs já são nativas do Node.js)
 
 ```bash
-npm install csv-parser
+npm install csv-parser axios sqlite3
 ```
 
 ## 3. Crie o seu ficheiro .env a partir do exemplo e preencha a chave da API:
