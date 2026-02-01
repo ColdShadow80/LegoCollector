@@ -1,5 +1,8 @@
 # LegoCollector
 
+```bash
+git clone https://github.com/ColdShadow80/LegoCollector.git
+```
 
 ## 1. Pré-requisitos
 
