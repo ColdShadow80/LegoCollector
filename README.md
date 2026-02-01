@@ -27,22 +27,23 @@ npm install
 npm install csv-parser
 ```
 
-2.2. Rode o script de importação
+## 3. Crie o seu ficheiro .env a partir do exemplo e preencha a chave da API:
+
+```bash
+cp .env.example .env
+```
+
+## 4.1 Obtenha os dados iniciais:
+Certifique-se que colocou sua API Key no arquivo .env.
+
+
+## 4.1 Rode o script de importação inicial
 
 ```bash
 node setup_bulk.js
 ```
 
-
-## 3. Crie o seu ficheiro .env a partir do exemplo e preencha a chave da API:
-
-```bash
-TO BE DONE
-```
-
-## 4. Obtenha os dados iniciais:
-Certifique-se que colocou sua API Key no arquivo .env.
-Rode o script de sincronização (pode demorar um pouco):
+## 4.2 OPCIONAL - Rode o script de sincronização adicional (apenas para obter dados recentes (pode demorar um pouco):
 
 ```bash
 npm run sync
