@@ -12,8 +12,6 @@ Instale o **Node.js** e o **Git**:
 sudo apt update
 sudo apt install nodejs npm git -y
 
-mkdir lego-tracker
-cd lego-tracker
 ```
 
 ## 2. Instale as bibliotecas:
