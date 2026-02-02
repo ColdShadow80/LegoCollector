@@ -20,11 +20,17 @@ sudo apt install nodejs npm git -y
 npm install
 ```
 
-2.1. Instale as bibliotecas adicionais para a atualização em batch no primeiro arranque:
+2.1. Instale as bibliotecas adicionais:
+
+Para a atualização em batch no primeiro arranque:
 (As bibliotecas zlib e fs já são nativas do Node.js)
 
 ```bash
 npm install csv-parser axios sqlite3
+```
+Pacotes de autenticação e gestão de sessão:
+```bash
+npm install passport passport-local passport-google-oauth20 express-session connect-sqlite3 bcrypt
 ```
 
 ## 3. Crie o seu ficheiro .env a partir do exemplo e preencha a chave da API:

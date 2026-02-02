@@ -6,99 +6,162 @@
     <title>Lego DB</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        .card-img-top { height: 200px; object-fit: contain; padding: 10px; }
-        .owned-badge { position: absolute; top: 10px; right: 10px; }
-        .retired { color: red; font-weight: bold; font-size: 0.8em; }
+        .set-card img { height: 180px; object-fit: contain; padding: 10px; transition: transform 0.2s; }
+        .set-card:hover img { transform: scale(1.05); }
+        .is-owned { border: 2px solid #198754; background-color: #f0fff4; }
+        .badge-owned { position: absolute; top: 10px; right: 10px; }
     </style>
 </head>
 <body class="bg-light">
 
-<nav class="navbar navbar-dark bg-dark mb-4">
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark sticky-top shadow">
     <div class="container">
-        <a class="navbar-brand" href="/">🧱 Meu Catálogo Lego</a>
+        <a class="navbar-brand fw-bold" href="/">🧱 LegoTracker</a>
+        <div class="d-flex text-white align-items-center">
+            <% if (user) { %>
+                <div class="dropdown">
+                    <button class="btn btn-dark dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                        👤 <%= user.name %>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><a class="dropdown-item" href="/">Minha Coleção</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item text-danger" href="/logout">Sair</a></li>
+                    </ul>
+                </div>
+            <% } else { %>
+                <a href="/login" class="btn btn-primary btn-sm px-3 rounded-pill">Entrar</a>
+            <% } %>
+        </div>
     </div>
 </nav>
 
-<div class="container">
-    <form class="row g-3 mb-4 bg-white p-3 rounded shadow-sm" action="/" method="GET">
-        <div class="col-md-3">
-            <input type="text" name="search" class="form-control" placeholder="Buscar Nome ou ID" value="<%= query.search || '' %>">
-        </div>
-        <div class="col-md-2">
-            <select name="theme" class="form-select">
-                <option value="">Todos os Temas</option>
-                <% themes.forEach(t => { %>
-                    <option value="<%= t.name %>" <%= query.theme === t.name ? 'selected' : '' %>><%= t.name %></option>
-                <% }) %>
-            </select>
-        </div>
-        <div class="col-md-2">
-            <select name="year" class="form-select">
-                <option value="">Todos os Anos</option>
-                <% years.forEach(y => { %>
-                    <option value="<%= y.year %>" <%= query.year == y.year ? 'selected' : '' %>><%= y.year %></option>
-                <% }) %>
-            </select>
-        </div>
-        <div class="col-md-2">
-            <select name="status" class="form-select">
-                <option value="">Status</option>
-                <option value="retired" <%= query.status === 'retired' ? 'selected' : '' %>>Descontinuados</option>
-                <option value="owned" <%= query.status === 'owned' ? 'selected' : '' %>>Minha Coleção</option>
-            </select>
-        </div>
-        <div class="col-md-2">
-            <button type="submit" class="btn btn-primary w-100">Filtrar</button>
-        </div>
-    </form>
+<div class="container mt-4">
 
-    <div class="row row-cols-1 row-cols-md-4 g-4">
+    <% if (viewMode === 'visitor_home') { %>
+        <div class="alert alert-info border-0 shadow-sm">
+            👋 <b>Bem-vindo!</b> Mostrando os lançamentos de <b><%= currentYear %></b>. 
+            <a href="/login" class="alert-link">Faça login</a> para gerir a sua coleção.
+        </div>
+    <% } else if (viewMode === 'my_collection') { %>
+        <div class="alert alert-success border-0 shadow-sm d-flex justify-content-between align-items-center">
+            <span>📚 Esta é a sua <b>Coleção Pessoal</b>.</span>
+            <span class="badge bg-success"><%= sets.length %> sets</span>
+        </div>
+    <% } else if (viewMode === 'global_search') { %>
+        <div class="alert alert-secondary border-0 shadow-sm">
+            🔍 Pesquisando na <b>Base de Dados Global</b>. Os itens que você já tem estão marcados a verde.
+        </div>
+    <% } %>
+
+    <div class="card p-3 mb-4 border-0 shadow-sm">
+        <form class="row g-2" action="/" method="GET">
+            <div class="col-md-5">
+                <input type="text" name="search" class="form-control" placeholder="🔍 Pesquisar nome ou ID..." value="<%= query.search || '' %>">
+            </div>
+            <div class="col-md-3">
+                <select name="theme" class="form-select">
+                    <option value="">Todos os Temas</option>
+                    <% themes.forEach(t => { %>
+                        <option value="<%= t.name %>" <%= query.theme === t.name ? 'selected' : '' %>><%= t.name %></option>
+                    <% }) %>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <select name="year" class="form-select">
+                    <option value="">Ano</option>
+                    <% years.forEach(y => { %>
+                        <option value="<%= y.year %>" <%= query.year == y.year ? 'selected' : '' %>><%= y.year %></option>
+                    <% }) %>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-dark w-100">Filtrar</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-lg-4 g-4 mb-5">
         <% sets.forEach(set => { %>
             <div class="col">
-                <div class="card h-100 shadow-sm border-0">
-                    <img src="<%= set.img_url %>" class="card-img-top" alt="<%= set.name %>">
-                    <% if(set.owned) { %>
-                        <span class="badge bg-success owned-badge">Na Coleção</span>
+                <div class="card h-100 border-0 shadow-sm set-card <%= set.is_owned ? 'is-owned' : '' %>" id="card-<%= set.set_num %>">
+                    <img src="<%= set.img_url || 'https://via.placeholder.com/300?text=No+Image' %>" class="card-img-top" loading="lazy">
+                    
+                    <% if (set.is_owned) { %>
+                        <span class="badge bg-success badge-owned">ADQUIRIDO</span>
                     <% } %>
-                    <div class="card-body">
-                        <h6 class="card-title text-truncate"><%= set.name %></h6>
-                        <p class="card-text small text-muted">
-                            <%= set.set_num %> | <%= set.year %> <br>
-                            <%= set.theme_name %> <br>
-                            Peças: <%= set.num_parts %>
-                        </p>
-                        <% if(set.eol_status === 'Retired') { %>
-                            <p class="retired">DESCONTINUADO</p>
-                        <% } %>
-                        <div class="form-check form-switch">
-                            <input class="form-check-input toggle-owned" type="checkbox" 
-                                data-id="<%= set.set_num %>" <%= set.owned ? 'checked' : '' %>>
-                            <label class="form-check-label small">Tenho este set</label>
+
+                    <div class="card-body d-flex flex-column">
+                        <h6 class="card-title text-truncate" title="<%= set.name %>"><%= set.name %></h6>
+                        <div class="small text-muted mb-2">
+                            <span><%= set.year %></span> • <span><%= set.num_parts %> peças</span>
+                        </div>
+                        <div class="mt-auto">
+                            <% if (user) { %>
+                                <button class="btn btn-sm w-100 toggle-btn <%= set.is_owned ? 'btn-outline-danger' : 'btn-outline-success' %>" 
+                                        onclick="toggleSet('<%= set.set_num %>', this)">
+                                    <%= set.is_owned ? 'Remover' : 'Adicionar' %>
+                                </button>
+                            <% } else { %>
+                                <span class="badge bg-light text-dark border"><%= set.set_num %></span>
+                            <% } %>
                         </div>
                     </div>
                 </div>
             </div>
         <% }) %>
     </div>
+    
+    <% if (sets.length === 0) { %>
+        <div class="text-center py-5 text-muted">
+            <h4>Nenhum set encontrado</h4>
+            <p>Tente ajustar os filtros ou pesquisar por outro termo.</p>
+        </div>
+    <% } %>
+
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-    // Script para marcar "Tenho" sem recarregar a página
-    document.querySelectorAll('.toggle-owned').forEach(toggle => {
-        toggle.addEventListener('change', async (e) => {
-            const setNum = e.target.dataset.id;
-            const isOwned = e.target.checked;
-            
-            await fetch('/api/toggle-owned', {
+    async function toggleSet(setNum, btn) {
+        // Estado atual visual (se tem a classe btn-outline-danger é porque já tem o set)
+        const isRemoving = btn.classList.contains('btn-outline-danger');
+        const newState = !isRemoving; // Se está removendo, o novo estado é false (não tem)
+
+        // Feedback imediato
+        btn.disabled = true;
+        btn.innerHTML = '...';
+
+        try {
+            const res = await fetch('/api/toggle', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ set_num: setNum, owned: isOwned })
+                body: JSON.stringify({ set_num: setNum, active: newState })
             });
-            // Opcional: Adicionar reload ou manipular o DOM para mostrar badge
-            location.reload(); 
-        });
-    });
-</script>
 
+            if (res.ok) {
+                // Atualiza UI
+                const card = document.getElementById('card-' + setNum);
+                
+                if (newState) {
+                    // Adicionou
+                    btn.className = 'btn btn-sm w-100 toggle-btn btn-outline-danger';
+                    btn.innerHTML = 'Remover';
+                    card.classList.add('is-owned');
+                } else {
+                    // Removeu
+                    btn.className = 'btn btn-sm w-100 toggle-btn btn-outline-success';
+                    btn.innerHTML = 'Adicionar';
+                    card.classList.remove('is-owned');
+                }
+            }
+        } catch (err) {
+            console.error(err);
+            alert('Erro ao atualizar coleção.');
+        } finally {
+            btn.disabled = false;
+        }
+    }
+</script>
 </body>
 </html>

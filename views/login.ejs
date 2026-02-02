@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Entrar - LegoTracker</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #f8f9fa; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+        .card-login { max-width: 800px; width: 100%; border: none; shadow: 0 10px 30px rgba(0,0,0,0.1); overflow: hidden; }
+        .bg-login { background: url('https://images.unsplash.com/photo-1585366119957-e9730b6d0f60?q=80&w=1000&auto=format&fit=crop') center/cover; }
+    </style>
+</head>
+<body>
+
+<div class="card card-login rounded-4">
+    <div class="row g-0">
+        <div class="col-md-5 bg-login d-none d-md-block"></div>
+
+        <div class="col-md-7 bg-white p-5">
+            <div class="text-center mb-4">
+                <h3 class="fw-bold">Bem-vindo de volta</h3>
+                <p class="text-muted">Faça gestão da sua coleção de Lego</p>
+            </div>
+
+            <div id="alert-box" class="alert alert-danger d-none"></div>
+
+            <ul class="nav nav-pills nav-fill mb-4" id="pills-tab" role="tablist">
+                <li class="nav-item">
+                    <button class="nav-link active" data-bs-toggle="pill" data-bs-target="#pills-login">Login</button>
+                </li>
+                <li class="nav-item">
+                    <button class="nav-link" data-bs-toggle="pill" data-bs-target="#pills-register">Registar</button>
+                </li>
+            </ul>
+
+            <div class="tab-content">
+                <div class="tab-pane fade show active" id="pills-login">
+                    <form action="/login" method="POST">
+                        <div class="mb-3">
+                            <label class="form-label">Email</label>
+                            <input type="email" name="email" class="form-control" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Password</label>
+                            <input type="password" name="password" class="form-control" required>
+                        </div>
+                        <button type="submit" class="btn btn-dark w-100 py-2">Entrar</button>
+                    </form>
+                    
+                    <div class="text-center my-3 text-muted">- OU -</div>
+                    
+                    <a href="/auth/google" class="btn btn-outline-danger w-100">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-google me-2" viewBox="0 0 16 16">
+                            <path d="M15.545 6.558a9.42 9.42 0 0 1 .139 1.626c0 2.434-.87 6.1-4.572 6.1C5.28 14.284 0 9.92 0 7.142 0 4.364 5.28 0 11.073 0c3.15 0 5.488 1.164 6.646 2.27L15.343 4.67c-.89-.838-2.316-1.554-4.27-1.554-3.414 0-6.192 2.768-6.192 6.192 0 3.424 2.778 6.192 6.192 6.192 1.95 0 3.666-.99 4.398-2.716h-4.398v-2.56h8.796z"/>
+                        </svg>
+                        Entrar com Google
+                    </a>
+                </div>
+
+                <div class="tab-pane fade" id="pills-register">
+                    <form action="/register" method="POST">
+                        <div class="mb-3">
+                            <label class="form-label">Nome</label>
+                            <input type="text" name="name" class="form-control" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Email</label>
+                            <input type="email" name="email" class="form-control" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Password</label>
+                            <input type="password" name="password" class="form-control" required>
+                        </div>
+                        <button type="submit" class="btn btn-success w-100 py-2">Criar Conta</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    // Script simples para mostrar erros baseados na URL (ex: /login?error=falha)
+    const urlParams = new URLSearchParams(window.location.search);
+    const alertBox = document.getElementById('alert-box');
+    
+    if (urlParams.has('error')) {
+        alertBox.textContent = 'Email ou password incorretos.';
+        alertBox.classList.remove('d-none');
+    } else if (urlParams.has('err') && urlParams.get('err') === 'exists') {
+        alertBox.textContent = 'Este email já está registado.';
+        alertBox.classList.remove('d-none');
+    }
+</script>
+
+</body>
+</html>
