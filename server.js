@@ -63,13 +63,13 @@ app.get('/', (req, res) => {
     const userId = req.user ? req.user.id : null;
     let { themes, year, search, page, limit } = req.query;
 
-    // Definição de Limites (Pref User ou URL)
+    // Definição de Limites
     let limitVal = limit || (req.user ? req.user.items_per_page : 25);
     if (limitVal === 'all') limitVal = 10000;
     let pageVal = parseInt(page) || 1;
     let offset = (pageVal - 1) * limitVal;
 
-    // Construção da Query
+    // Construção da Query de Filtros
     let sqlParams = [];
     let whereClause = "WHERE 1=1";
 
@@ -106,7 +106,7 @@ app.get('/', (req, res) => {
         const totalItems = row ? row.total : 0;
         const totalPages = Math.ceil(totalItems / limitVal);
 
-        // Query 2: Dados Reais (Agrupados por tema para o Accordion funcionar)
+        // Query 2: Dados Reais dos Sets
         let dataSql = `
             SELECT sets.*, themes.name as theme_name, 
             CASE WHEN user_sets.user_id IS NOT NULL THEN 1 ELSE 0 END as is_owned
@@ -119,10 +119,24 @@ app.get('/', (req, res) => {
         `;
 
         db.all(dataSql, [userId, ...sqlParams, limitVal, offset], (err, sets) => {
-            db.all("SELECT DISTINCT name FROM themes ORDER BY name", [], (e1, allThemes) => {
+            
+            // Query 3: Lista de Temas COM Intervalo de Anos
+            // Nota: JOIN com sets para calcular MIN/MAX year. 
+            // Mostra apenas temas que têm sets na base de dados.
+            let themesSql = `
+                SELECT themes.name, MIN(sets.year) as min_year, MAX(sets.year) as max_year
+                FROM themes
+                JOIN sets ON themes.id = sets.theme_id
+                GROUP BY themes.id
+                ORDER BY themes.name ASC
+            `;
+
+            db.all(themesSql, [], (e1, allThemes) => {
                 db.all("SELECT DISTINCT year FROM sets ORDER BY year DESC", [], (e2, allYears) => {
                     res.render('index', { 
-                        sets: sets || [], allThemes: allThemes || [], allYears: allYears || [], 
+                        sets: sets || [], 
+                        allThemes: allThemes || [], 
+                        allYears: allYears || [], 
                         query: req.query, 
                         pagination: { page: pageVal, limit: limit || (req.user?.items_per_page || 25), totalPages, totalItems },
                         user: req.user,
@@ -134,7 +148,7 @@ app.get('/', (req, res) => {
     });
 });
 
-// Rota API: Salvar Preferências
+// API Preferências
 app.post('/api/preferences', (req, res) => {
     if (!req.user) return res.status(401).json({error: "Login necessário"});
     const { dark_mode, items_per_page } = req.body;
@@ -155,7 +169,7 @@ app.post('/api/preferences', (req, res) => {
     } else { res.json({ok: true}); }
 });
 
-// Rotas Auth padrão
+// Rotas Auth
 app.get('/login', (req, res) => res.render('login'));
 app.post('/login', passport.authenticate('local', { successRedirect: '/', failureRedirect: '/login?error=1' }));
 app.get('/logout', (req, res) => { req.logout(() => res.redirect('/')); });
