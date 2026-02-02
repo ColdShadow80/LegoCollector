@@ -28,9 +28,10 @@ Para a atualização em batch no primeiro arranque:
 ```bash
 npm install csv-parser axios sqlite3
 ```
-Pacotes de autenticação e gestão de sessão:
+Pacotes de autenticação e gestão de sessão. Pacote CRON para updates automáticos da BD do site (lista de peças):
 ```bash
 npm install passport passport-local passport-google-oauth20 express-session connect-sqlite3 bcrypt
+npm install node-cron
 ```
 
 ## 3. Crie o seu ficheiro .env a partir do exemplo e preencha a chave da API:
