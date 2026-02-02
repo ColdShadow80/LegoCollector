@@ -6,6 +6,8 @@ const passport = require('passport');
 const LocalStrategy = require('passport-local').Strategy;
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const bcrypt = require('bcrypt');
+const cron = require('node-cron');          // NOVO: Agendador
+const { exec } = require('child_process');  // NOVO: Para rodar o script sync.js
 const db = require('./db');
 const app = express();
 
@@ -58,18 +60,16 @@ app.use(session({
 app.use(passport.initialize());
 app.use(passport.session());
 
-// --- 3. ROTA PRINCIPAL (COM PAGINAÇÃO E FILTROS) ---
+// --- 3. ROTA PRINCIPAL ---
 app.get('/', (req, res) => {
     const userId = req.user ? req.user.id : null;
     let { themes, year, search, page, limit } = req.query;
 
-    // Definição de Limites
     let limitVal = limit || (req.user ? req.user.items_per_page : 25);
     if (limitVal === 'all') limitVal = 10000;
     let pageVal = parseInt(page) || 1;
     let offset = (pageVal - 1) * limitVal;
 
-    // Construção da Query de Filtros
     let sqlParams = [];
     let whereClause = "WHERE 1=1";
 
@@ -83,7 +83,6 @@ app.get('/', (req, res) => {
     if (year) { whereClause += " AND sets.year = ?"; sqlParams.push(year); }
     if (search) { whereClause += " AND (sets.name LIKE ? OR sets.set_num LIKE ?)"; sqlParams.push(`%${search}%`, `%${search}%`); }
 
-    // Lógica Visitante vs Coleção
     if (req.user && !themes && !year && !search) {
         whereClause += " AND user_sets.user_id = ?";
         sqlParams.push(userId);
@@ -92,7 +91,6 @@ app.get('/', (req, res) => {
         sqlParams.push(new Date().getFullYear());
     }
 
-    // Query 1: Contagem Total (para paginação)
     let countSql = `
         SELECT COUNT(*) as total 
         FROM sets 
@@ -106,7 +104,6 @@ app.get('/', (req, res) => {
         const totalItems = row ? row.total : 0;
         const totalPages = Math.ceil(totalItems / limitVal);
 
-        // Query 2: Dados Reais dos Sets
         let dataSql = `
             SELECT sets.*, themes.name as theme_name, 
             CASE WHEN user_sets.user_id IS NOT NULL THEN 1 ELSE 0 END as is_owned
@@ -119,9 +116,6 @@ app.get('/', (req, res) => {
         `;
 
         db.all(dataSql, [userId, ...sqlParams, limitVal, offset], (err, sets) => {
-            
-            // Query 3: Lista de Temas Agrupada por NOME
-            // CORREÇÃO: GROUP BY themes.name em vez de themes.id
             let themesSql = `
                 SELECT themes.name, MIN(sets.year) as min_year, MAX(sets.year) as max_year
                 FROM themes
@@ -133,9 +127,7 @@ app.get('/', (req, res) => {
             db.all(themesSql, [], (e1, allThemes) => {
                 db.all("SELECT DISTINCT year FROM sets ORDER BY year DESC", [], (e2, allYears) => {
                     res.render('index', { 
-                        sets: sets || [], 
-                        allThemes: allThemes || [], 
-                        allYears: allYears || [], 
+                        sets: sets || [], allThemes: allThemes || [], allYears: allYears || [], 
                         query: req.query, 
                         pagination: { page: pageVal, limit: limit || (req.user?.items_per_page || 25), totalPages, totalItems },
                         user: req.user,
@@ -199,6 +191,16 @@ app.get('/auth/google', (req, res, next) => {
     passport.authenticate('google', { scope: ['profile', 'email'] })(req, res, next);
 });
 app.get('/auth/google/callback', passport.authenticate('google', { failureRedirect: '/login' }), (req, res) => res.redirect('/'));
+
+// --- AGENDAMENTO (CRON JOB) ---
+// Executa todos os dias às 04:00 AM
+cron.schedule('0 4 * * *', () => {
+    console.log("⏰ Cron Job: A iniciar verificação de novos sets...");
+    exec('node sync.js', (error, stdout, stderr) => {
+        if (error) console.error(`❌ Erro no Cron: ${error.message}`);
+        else console.log(`✅ Resultado Cron:\n${stdout}`);
+    });
+});
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🚀 Servidor na porta ${PORT}`));
