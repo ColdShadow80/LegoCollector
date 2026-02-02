@@ -120,14 +120,13 @@ app.get('/', (req, res) => {
 
         db.all(dataSql, [userId, ...sqlParams, limitVal, offset], (err, sets) => {
             
-            // Query 3: Lista de Temas COM Intervalo de Anos
-            // Nota: JOIN com sets para calcular MIN/MAX year. 
-            // Mostra apenas temas que têm sets na base de dados.
+            // Query 3: Lista de Temas Agrupada por NOME
+            // CORREÇÃO: GROUP BY themes.name em vez de themes.id
             let themesSql = `
                 SELECT themes.name, MIN(sets.year) as min_year, MAX(sets.year) as max_year
                 FROM themes
                 JOIN sets ON themes.id = sets.theme_id
-                GROUP BY themes.id
+                GROUP BY themes.name
                 ORDER BY themes.name ASC
             `;
 
