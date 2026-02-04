@@ -26,7 +26,7 @@ const MIGRATIONS = [
     );
     CREATE TABLE IF NOT EXISTS schema_version (version INTEGER);`,
 
-    // V3: Preferências de Utilizador
+    // V3: Preferências
     `ALTER TABLE users ADD COLUMN dark_mode INTEGER DEFAULT 0;
      ALTER TABLE users ADD COLUMN items_per_page INTEGER DEFAULT 25;`,
 
@@ -34,49 +34,40 @@ const MIGRATIONS = [
     `ALTER TABLE users ADD COLUMN is_verified INTEGER DEFAULT 0;
      ALTER TABLE users ADD COLUMN verify_token TEXT;
      ALTER TABLE users ADD COLUMN reset_token TEXT;
-     ALTER TABLE users ADD COLUMN reset_expires INTEGER;`
+     ALTER TABLE users ADD COLUMN reset_expires INTEGER;`,
+     
+     // V5: ADMINISTRAÇÃO E GESTÃO DE TEMAS (NOVO)
+     `ALTER TABLE themes ADD COLUMN is_hidden INTEGER DEFAULT 0;
+      ALTER TABLE themes ADD COLUMN ignore_parts INTEGER DEFAULT 0;
+      ALTER TABLE users ADD COLUMN last_login DATETIME;`
 ];
 
 function runMigrations() {
     db.serialize(() => {
-        // 1. Garante que a tabela de versão existe
-        db.run("CREATE TABLE IF NOT EXISTS schema_version (version INTEGER)", (err) => {
-            if (err) console.error(err);
-            
-            // 2. Verifica versão atual
-            db.get("SELECT version FROM schema_version", (err, row) => {
-                let currentVersion = row ? row.version : 0;
-                
-                if (currentVersion < MIGRATIONS.length) {
-                    console.log(`🔄 A atualizar Base de Dados da v${currentVersion} para v${MIGRATIONS.length}...`);
-                    
-                    db.serialize(() => {
-                        db.run("BEGIN TRANSACTION");
-                        
-                        for (let i = currentVersion; i < MIGRATIONS.length; i++) {
-                            console.log(`   > Aplicando migração v${i + 1}...`);
-                            const commands = MIGRATIONS[i].split(';').filter(cmd => cmd.trim() !== '');
-                            commands.forEach(command => {
-                                db.run(command, (err) => { 
-                                    // Ignora erro de "duplicate column" se a coluna já existir
-                                    if(err && !err.message.includes('duplicate column')) console.log("Nota:", err.message); 
-                                });
+        db.run("CREATE TABLE IF NOT EXISTS schema_version (version INTEGER)");
+        db.get("SELECT version FROM schema_version", (err, row) => {
+            let currentVersion = row ? row.version : 0;
+            if (currentVersion < MIGRATIONS.length) {
+                console.log(`🔄 A atualizar Base de Dados da v${currentVersion} para v${MIGRATIONS.length}...`);
+                db.serialize(() => {
+                    db.run("BEGIN TRANSACTION");
+                    for (let i = currentVersion; i < MIGRATIONS.length; i++) {
+                        console.log(`   > Aplicando migração v${i + 1}...`);
+                        const commands = MIGRATIONS[i].split(';').filter(cmd => cmd.trim() !== '');
+                        commands.forEach(command => {
+                            db.run(command, (err) => { 
+                                if(err && !err.message.includes('duplicate column')) console.log("Nota:", err.message); 
                             });
-                        }
-
-                        // Atualiza a versão final
-                        db.run("DELETE FROM schema_version");
-                        db.run("INSERT INTO schema_version (version) VALUES (?)", [MIGRATIONS.length]);
-                        
-                        db.run("COMMIT", () => console.log("✅ Base de dados atualizada!"));
-                    });
-                }
-            });
+                        });
+                    }
+                    db.run("DELETE FROM schema_version");
+                    db.run("INSERT INTO schema_version (version) VALUES (?)", [MIGRATIONS.length]);
+                    db.run("COMMIT", () => console.log("✅ Base de dados atualizada!"));
+                });
+            }
         });
     });
 }
 
-// Executa migrações ao iniciar
 runMigrations();
-
 module.exports = db;
