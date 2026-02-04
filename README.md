@@ -31,6 +31,11 @@ npm install csv-parser axios sqlite3
 Pacotes de autenticação e gestão de sessão. Pacote CRON para updates automáticos da BD do site (lista de peças):
 ```bash
 npm install passport passport-local passport-google-oauth20 express-session connect-sqlite3 bcrypt node-cron
+<<<<<<< develop
+npm install nodemailer
+
+=======
+>>>>>>> main
 ```
 
 ## 3. Crie o seu ficheiro .env a partir do exemplo e preencha a chave da API:

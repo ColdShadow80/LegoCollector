@@ -4,7 +4,11 @@ const db = new sqlite3.Database('./lego.db');
 // --- SISTEMA DE MIGRAÇÕES ---
 // Cada entrada no array é uma versão da base de dados.
 const MIGRATIONS = [
+<<<<<<< develop
+    // V1: Tabelas Base
+=======
     // V1: Estrutura Base
+>>>>>>> main
     `CREATE TABLE IF NOT EXISTS sets (
         set_num TEXT PRIMARY KEY, name TEXT, year INTEGER, theme_id INTEGER, 
         num_parts INTEGER, img_url TEXT, eol_status TEXT DEFAULT 'Active', 
@@ -12,9 +16,13 @@ const MIGRATIONS = [
     );
     CREATE TABLE IF NOT EXISTS themes (
         id INTEGER PRIMARY KEY, name TEXT, parent_id INTEGER
-    );`,
+    );`, // <--- Vírgula importante aqui
 
+<<<<<<< develop
+    // V2: Multi-User
+=======
     // V2: Multi-Utilizador
+>>>>>>> main
     `CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         email TEXT UNIQUE, password TEXT, name TEXT, google_id TEXT UNIQUE
@@ -25,11 +33,25 @@ const MIGRATIONS = [
         FOREIGN KEY(user_id) REFERENCES users(id),
         FOREIGN KEY(set_num) REFERENCES sets(set_num)
     );
+<<<<<<< develop
+    CREATE TABLE IF NOT EXISTS schema_version (version INTEGER);`, // <--- Vírgula importante aqui
+
+    // V3: Preferências de Utilizador
+    `ALTER TABLE users ADD COLUMN dark_mode INTEGER DEFAULT 0;
+     ALTER TABLE users ADD COLUMN items_per_page INTEGER DEFAULT 25;`, // <--- O ERRO ESTAVA AQUI (Faltava esta vírgula)
+
+    // V4: Segurança e Email
+    `ALTER TABLE users ADD COLUMN is_verified INTEGER DEFAULT 0;
+     ALTER TABLE users ADD COLUMN verify_token TEXT;
+     ALTER TABLE users ADD COLUMN reset_token TEXT;
+     ALTER TABLE users ADD COLUMN reset_expires INTEGER;`
+=======
     CREATE TABLE IF NOT EXISTS schema_version (version INTEGER);`,
 
     // V3: Preferências de Utilizador (Modo Escuro e Paginação)
     `ALTER TABLE users ADD COLUMN dark_mode INTEGER DEFAULT 0;
      ALTER TABLE users ADD COLUMN items_per_page INTEGER DEFAULT 25;`
+>>>>>>> main
 ];
 
 function runMigrations() {
@@ -39,7 +61,11 @@ function runMigrations() {
             if (err) console.error(err);
             
             // 2. Verifica versão atual
+<<<<<<< develop
+            db.get("SELECT version FROM schema_version", (err, row) => {
+=======
             db.get("SELECT version FROM schema_version", async (err, row) => {
+>>>>>>> main
                 let currentVersion = row ? row.version : 0;
                 
                 if (currentVersion < MIGRATIONS.length) {
@@ -50,11 +76,18 @@ function runMigrations() {
                         
                         for (let i = currentVersion; i < MIGRATIONS.length; i++) {
                             console.log(`   > Aplicando migração v${i + 1}...`);
+<<<<<<< develop
+                            const commands = MIGRATIONS[i].split(';').filter(cmd => cmd.trim() !== '');
+                            commands.forEach(command => {
+                                db.run(command, (err) => { 
+                                    // Ignora erro de "duplicate column" se a coluna já existir
+=======
                             // Separa comandos por ponto e vírgula se houver múltiplos numa string
                             const commands = MIGRATIONS[i].split(';').filter(cmd => cmd.trim() !== '');
                             commands.forEach(command => {
                                 // Ignora erros de "coluna já existe" se rodar multiplas vezes
                                 db.run(command, (err) => { 
+>>>>>>> main
                                     if(err && !err.message.includes('duplicate column')) console.log("Nota:", err.message); 
                                 });
                             });
