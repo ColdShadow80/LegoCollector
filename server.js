@@ -13,7 +13,7 @@ const crypto = require('crypto');
 const db = require('./db');
 const app = express();
 
-// --- EMAIL ---
+// --- 1. CONFIGURAÇÃO EMAIL ---
 const transporter = nodemailer.createTransport({
     service: process.env.EMAIL_SERVICE || 'gmail',
     auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS }
@@ -27,7 +27,7 @@ async function sendEmail(to, subject, text) {
     await transporter.sendMail({ from: process.env.EMAIL_USER, to, subject, text });
 }
 
-// --- PASSPORT ---
+// --- 2. CONFIGURAÇÃO PASSPORT ---
 passport.serializeUser((user, done) => done(null, user.id));
 passport.deserializeUser((id, done) => {
     db.get("SELECT id, name, email, dark_mode, items_per_page FROM users WHERE id = ?", [id], (err, row) => done(err, row));
@@ -48,7 +48,7 @@ passport.use(new LocalStrategy({ usernameField: 'email' }, (email, password, don
     });
 }));
 
-// Configuração Google (Sempre ativa, validação dentro da rota)
+// Configuração Google (Sempre ativa para evitar erro 404)
 if (process.env.GOOGLE_CLIENT_ID) {
     passport.use(new GoogleStrategy({
         clientID: process.env.GOOGLE_CLIENT_ID,
@@ -71,6 +71,7 @@ if (process.env.GOOGLE_CLIENT_ID) {
     }));
 }
 
+// --- 3. MIDDLEWARES ---
 app.set('view engine', 'ejs');
 app.use(express.static('public'));
 app.use(express.json());
@@ -91,7 +92,7 @@ app.use((req, res, next) => {
     next();
 });
 
-// --- ROTA PRINCIPAL (CORRIGIDA PARA MOSTRAR DADOS) ---
+// --- 4. ROTA PRINCIPAL ---
 app.get('/', (req, res) => {
     const userId = req.user ? req.user.id : null;
     let { themes, year, search, page, limit } = req.query;
@@ -112,14 +113,13 @@ app.get('/', (req, res) => {
     if (year) { whereClause += " AND sets.year = ?"; sqlParams.push(year); }
     if (search) { whereClause += " AND (sets.name LIKE ? OR sets.set_num LIKE ?)"; sqlParams.push(`%${search}%`, `%${search}%`); }
 
-    // FILTRO PADRÃO: Se for visitante e não filtrar nada, mostra TUDO (removido filtro de ano 2026)
-    // Isto resolve o problema de "não aparece nada" se só tiver sets de 2024/2025
+    // Filtro visitante padrão
     if (req.user && !themes && !year && !search) {
         whereClause += " AND user_sets.user_id = ?";
         sqlParams.push(userId);
     }
 
-    // Contagem
+    // QUERY 1: Contagem
     let countSql = `
         SELECT COUNT(*) as total 
         FROM sets 
@@ -132,7 +132,7 @@ app.get('/', (req, res) => {
         const totalItems = row ? row.total : 0;
         const totalPages = Math.ceil(totalItems / limitVal);
 
-        // Dados
+        // QUERY 2: Dados (Ordenação Corrigida)
         let dataSql = `
             SELECT sets.*, themes.name as theme_name, 
             CASE WHEN user_sets.user_id IS NOT NULL THEN 1 ELSE 0 END as is_owned
@@ -140,12 +140,13 @@ app.get('/', (req, res) => {
             LEFT JOIN themes ON sets.theme_id = themes.id 
             LEFT JOIN user_sets ON sets.set_num = user_sets.set_num AND user_sets.user_id = ? 
             ${whereClause}
-            ORDER BY sets.year DESC, sets.name ASC 
+            ORDER BY themes.name ASC, sets.year DESC 
             LIMIT ? OFFSET ?
         `;
 
         db.all(dataSql, [userId, ...sqlParams, limitVal, offset], (err, sets) => {
-            // Sidebar: Se não houver temas, não crasha, apenas mostra vazio
+            
+            // QUERY 3: Sidebar (CORREÇÃO: GROUP BY NAME para evitar duplicados)
             let themesSql = `
                 SELECT themes.name, MIN(sets.year) as min_year, MAX(sets.year) as max_year
                 FROM themes
@@ -171,56 +172,52 @@ app.get('/', (req, res) => {
     });
 });
 
-// --- AUTENTICAÇÃO ---
+// --- 5. ROTAS DE AUTENTICAÇÃO ---
 app.get('/login', (req, res) => res.render('login'));
 app.post('/login', passport.authenticate('local', { successRedirect: '/', failureRedirect: '/login?error=Credenciais inválidas' }));
 app.get('/logout', (req, res) => { req.logout(() => res.redirect('/')); });
 
-app.post('/register', async (req, res) => {
-    // ... (Código de registo igual ao anterior) ...
-    // Para poupar espaço, assumo que mantém o código de registo/reset que funcionava
-    // Se precisar, posso reenviar o bloco do registo.
-    const { name, email, password } = req.body;
-    try {
-        const exists = await new Promise(r => db.get("SELECT id FROM users WHERE email=?", [email], (e,row)=>r(row)));
-        if(exists) return res.redirect('/login?error=Email já existe');
-        const hashed = await bcrypt.hash(password, 10);
-        const token = crypto.randomBytes(32).toString('hex');
-        db.run("INSERT INTO users (name,email,password,is_verified,verify_token) VALUES (?,?,?,0,?)", [name,email,hashed,token], function(err){
-            if(err) return res.redirect('/login?error=Erro');
-            sendEmail(email, "Ativar Conta", `Link: http://${req.headers.host}/verify/${token}`);
-            if(this.lastID===1) db.run("INSERT OR IGNORE INTO user_sets (user_id, set_num) SELECT 1, set_num FROM sets WHERE owned=1");
-            res.redirect('/login?success=Verifique o email');
-        });
-    } catch(e) { res.redirect('/login?error=Erro'); }
-});
-
-app.get('/verify/:token', (req, res) => {
-    db.get("SELECT id FROM users WHERE verify_token=?", [req.params.token], (e,u) => {
-        if(!u) return res.redirect('/login?error=Inválido');
-        db.run("UPDATE users SET is_verified=1, verify_token=NULL WHERE id=?", [u.id], ()=> res.redirect('/login?success=Ativo'));
-    });
-});
-
-// --- ROTA GOOGLE CORRIGIDA ---
-// Define a rota SEMPRE. O erro é tratado lá dentro.
+// ROTA GOOGLE - AGORA FORA DO BLOCO IF PARA EVITAR "Cannot GET"
 app.get('/auth/google', (req, res, next) => {
     if (!process.env.GOOGLE_CLIENT_ID) {
-        return res.send("<h1>Erro 500</h1><p>Google Auth não configurado no .env deste servidor.</p>");
+        return res.status(500).send("<h1>Erro de Configuração</h1><p>GOOGLE_CLIENT_ID não encontrado no ficheiro .env</p>");
     }
     passport.authenticate('google', { scope: ['profile', 'email'] })(req, res, next);
 });
 
 app.get('/auth/google/callback', 
-    (req, res, next) => {
-        if (!process.env.GOOGLE_CLIENT_ID) return res.redirect('/login');
-        next();
-    },
-    passport.authenticate('google', { failureRedirect: '/login?error=Falha Google' }),
+    passport.authenticate('google', { failureRedirect: '/login?error=Falha no Login Google' }),
     (req, res) => res.redirect('/')
 );
 
-// --- API ---
+// Rota de Registo Local
+app.post('/register', async (req, res) => {
+    const { name, email, password } = req.body;
+    try {
+        const exists = await new Promise(r => db.get("SELECT id FROM users WHERE email=?", [email], (e,row)=>r(row)));
+        if(exists) return res.redirect('/login?error=Email já existe');
+        
+        const hashed = await bcrypt.hash(password, 10);
+        const token = crypto.randomBytes(32).toString('hex');
+        
+        db.run("INSERT INTO users (name,email,password,is_verified,verify_token) VALUES (?,?,?,0,?)", [name,email,hashed,token], function(err){
+            if(err) return res.redirect('/login?error=Erro ao registar');
+            sendEmail(email, "Ativar Conta", `Link: http://${req.headers.host}/verify/${token}`);
+            
+            if(this.lastID===1) db.run("INSERT OR IGNORE INTO user_sets (user_id, set_num) SELECT 1, set_num FROM sets WHERE owned=1");
+            res.redirect('/login?success=Registo efetuado. Verifique o seu email (ou consola).');
+        });
+    } catch(e) { res.redirect('/login?error=Erro no servidor'); }
+});
+
+app.get('/verify/:token', (req, res) => {
+    db.get("SELECT id FROM users WHERE verify_token=?", [req.params.token], (e,u) => {
+        if(!u) return res.redirect('/login?error=Token inválido');
+        db.run("UPDATE users SET is_verified=1, verify_token=NULL WHERE id=?", [u.id], ()=> res.redirect('/login?success=Conta ativada!'));
+    });
+});
+
+// --- 6. API E CRON ---
 app.post('/api/toggle', (req, res) => {
     if (!req.user) return res.status(401).send();
     const q = req.body.active ? "INSERT OR IGNORE INTO user_sets (user_id, set_num) VALUES (?,?)" : "DELETE FROM user_sets WHERE user_id=? AND set_num=?";
@@ -237,7 +234,6 @@ app.post('/api/preferences', (req, res) => {
     else res.json({ok:true});
 });
 
-// Cron
 cron.schedule('0 4 * * *', () => exec('node sync.js', (e, out) => console.log(out || e)));
 
 const PORT = process.env.PORT || 3000;
