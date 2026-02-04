@@ -159,9 +159,7 @@ app.get('/', (req, res) => {
             db.all(themesSql, [], (e1, allThemes) => {
                 db.all("SELECT DISTINCT year FROM sets ORDER BY year DESC", [], (e2, allYears) => {
                     res.render('index', { 
-                        sets: sets || [], 
-                        allThemes: allThemes || [], 
-                        allYears: allYears || [], 
+                        sets: sets || [], allThemes: allThemes || [], allYears: allYears || [], 
                         query: req.query, 
                         pagination: { page: pageVal, limit: limit || (req.user?.items_per_page || 25), totalPages, totalItems },
                         user: req.user,
@@ -251,6 +249,16 @@ app.post('/api/preferences', (req, res) => {
 });
 
 cron.schedule('0 4 * * *', () => exec('node sync.js', (e, out) => console.log(out || e)));
+
+// --- AGENDAMENTO (CRON JOB) ---
+// Executa todos os dias às 04:00 AM
+cron.schedule('0 4 * * *', () => {
+    console.log("⏰ Cron Job: A iniciar verificação de novos sets...");
+    exec('node sync.js', (error, stdout, stderr) => {
+        if (error) console.error(`❌ Erro no Cron: ${error.message}`);
+        else console.log(`✅ Resultado Cron:\n${stdout}`);
+    });
+});
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🚀 Servidor na porta ${PORT}`));
