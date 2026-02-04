@@ -53,7 +53,7 @@ passport.use(new LocalStrategy({ usernameField: 'email' }, (email, password, don
             return done(null, user);
         }
         return done(null, false, { message: 'Credenciais inválidas.' });
-    }));
+    }); // <--- CORREÇÃO AQUI: Estava })); agora está });
 }));
 
 if (process.env.GOOGLE_CLIENT_ID) {
@@ -110,7 +110,6 @@ app.get('/', (req, res) => {
     let pageVal = parseInt(page) || 1;
     let offset = (pageVal - 1) * limitVal;
 
-    // FILTRO DE SEGURANÇA: Não mostrar temas ocultos (is_hidden) na homepage
     let whereClause = "WHERE (themes.is_hidden IS NULL OR themes.is_hidden = 0)";
     let sqlParams = [];
 
@@ -136,7 +135,6 @@ app.get('/', (req, res) => {
         let dataSql = `SELECT sets.*, themes.name as theme_name, CASE WHEN user_sets.user_id IS NOT NULL THEN 1 ELSE 0 END as is_owned FROM sets LEFT JOIN themes ON sets.theme_id = themes.id LEFT JOIN user_sets ON sets.set_num = user_sets.set_num AND user_sets.user_id = ? ${whereClause} ORDER BY themes.name ASC, sets.year DESC LIMIT ? OFFSET ?`;
 
         db.all(dataSql, [userId, ...sqlParams, limitVal, offset], (err, sets) => {
-            // Sidebar: Apenas temas visíveis
             let themesSql = `
                 SELECT themes.name, MIN(sets.year) as min_year, MAX(sets.year) as max_year
                 FROM themes
@@ -177,7 +175,6 @@ app.get('/admin/themes', ensureAdmin, (req, res) => {
     });
 });
 
-// API para ligar/desligar flags dos temas
 app.post('/admin/themes/toggle', ensureAdmin, (req, res) => {
     const { theme_id, field, value } = req.body;
     if (!['is_hidden', 'ignore_parts'].includes(field)) return res.status(400).send();
