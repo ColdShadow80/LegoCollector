@@ -21,7 +21,9 @@ const transporter = nodemailer.createTransport({
 
 async function sendEmail(to, subject, text) {
     if (!process.env.EMAIL_USER) {
-        console.log(`📨 [DEV EMAIL] Para: ${to} | ${subject}\n${text}`);
+        console.log(`\n📨 [DEV EMAIL SIMULADO] Para: ${to}`);
+        console.log(`📝 Assunto: ${subject}`);
+        console.log(`🔗 Conteúdo:\n${text}\n`);
         return;
     }
     await transporter.sendMail({ from: process.env.EMAIL_USER, to, subject, text });
@@ -36,19 +38,23 @@ passport.deserializeUser((id, done) => {
 passport.use(new LocalStrategy({ usernameField: 'email' }, (email, password, done) => {
     db.get("SELECT * FROM users WHERE email = ?", [email], async (err, user) => {
         if (err) return done(err);
-        if (!user) return done(null, false, { message: 'Email desconhecido.' });
-        if (!user.password) return done(null, false, { message: 'Use Google Login.' });
+        if (!user) return done(null, false, { message: 'Email não registado.' });
+        if (!user.password) return done(null, false, { message: 'Esta conta usa Login Google.' });
+        
         try {
             if (await bcrypt.compare(password, user.password)) {
-                if (user.is_verified === 0) return done(null, false, { message: 'Email não verificado.' });
+                // VERIFICAÇÃO DE EMAIL
+                if (user.is_verified === 0) {
+                    return done(null, false, { message: 'Conta não ativada. Verifique o seu email (ou consola).' });
+                }
                 return done(null, user);
             }
-            return done(null, false, { message: 'Password errada.' });
+            return done(null, false, { message: 'Password incorreta.' });
         } catch(e) { return done(e); }
     });
 }));
 
-// Configuração Google (Sempre ativa para evitar erro 404)
+// Configuração Google
 if (process.env.GOOGLE_CLIENT_ID) {
     passport.use(new GoogleStrategy({
         clientID: process.env.GOOGLE_CLIENT_ID,
@@ -113,13 +119,11 @@ app.get('/', (req, res) => {
     if (year) { whereClause += " AND sets.year = ?"; sqlParams.push(year); }
     if (search) { whereClause += " AND (sets.name LIKE ? OR sets.set_num LIKE ?)"; sqlParams.push(`%${search}%`, `%${search}%`); }
 
-    // Filtro visitante padrão
     if (req.user && !themes && !year && !search) {
         whereClause += " AND user_sets.user_id = ?";
         sqlParams.push(userId);
     }
 
-    // QUERY 1: Contagem
     let countSql = `
         SELECT COUNT(*) as total 
         FROM sets 
@@ -132,7 +136,6 @@ app.get('/', (req, res) => {
         const totalItems = row ? row.total : 0;
         const totalPages = Math.ceil(totalItems / limitVal);
 
-        // QUERY 2: Dados (Ordenação Corrigida)
         let dataSql = `
             SELECT sets.*, themes.name as theme_name, 
             CASE WHEN user_sets.user_id IS NOT NULL THEN 1 ELSE 0 END as is_owned
@@ -145,8 +148,6 @@ app.get('/', (req, res) => {
         `;
 
         db.all(dataSql, [userId, ...sqlParams, limitVal, offset], (err, sets) => {
-            
-            // QUERY 3: Sidebar (CORREÇÃO: GROUP BY NAME para evitar duplicados)
             let themesSql = `
                 SELECT themes.name, MIN(sets.year) as min_year, MAX(sets.year) as max_year
                 FROM themes
@@ -172,25 +173,38 @@ app.get('/', (req, res) => {
     });
 });
 
-// --- 5. ROTAS DE AUTENTICAÇÃO ---
+// --- 5. ROTAS DE AUTENTICAÇÃO (CORRIGIDAS) ---
 app.get('/login', (req, res) => res.render('login'));
-app.post('/login', passport.authenticate('local', { successRedirect: '/', failureRedirect: '/login?error=Credenciais inválidas' }));
+
+// ROTA DE LOGIN CORRIGIDA: Agora captura a mensagem exata do erro
+app.post('/login', (req, res, next) => {
+    passport.authenticate('local', (err, user, info) => {
+        if (err) { return next(err); }
+        if (!user) { 
+            // Redireciona com a mensagem ESPECÍFICA (ex: Conta não ativada)
+            return res.redirect('/login?error=' + encodeURIComponent(info.message || 'Erro no login')); 
+        }
+        req.logIn(user, (err) => {
+            if (err) { return next(err); }
+            return res.redirect('/');
+        });
+    })(req, res, next);
+});
+
 app.get('/logout', (req, res) => { req.logout(() => res.redirect('/')); });
 
-// ROTA GOOGLE - AGORA FORA DO BLOCO IF PARA EVITAR "Cannot GET"
+// Google
 app.get('/auth/google', (req, res, next) => {
-    if (!process.env.GOOGLE_CLIENT_ID) {
-        return res.status(500).send("<h1>Erro de Configuração</h1><p>GOOGLE_CLIENT_ID não encontrado no ficheiro .env</p>");
-    }
+    if (!process.env.GOOGLE_CLIENT_ID) return res.status(500).send("Erro: GOOGLE_CLIENT_ID não configurado.");
     passport.authenticate('google', { scope: ['profile', 'email'] })(req, res, next);
 });
 
 app.get('/auth/google/callback', 
-    passport.authenticate('google', { failureRedirect: '/login?error=Falha no Login Google' }),
+    passport.authenticate('google', { failureRedirect: '/login?error=Falha Google' }),
     (req, res) => res.redirect('/')
 );
 
-// Rota de Registo Local
+// Registo
 app.post('/register', async (req, res) => {
     const { name, email, password } = req.body;
     try {
@@ -202,18 +216,20 @@ app.post('/register', async (req, res) => {
         
         db.run("INSERT INTO users (name,email,password,is_verified,verify_token) VALUES (?,?,?,0,?)", [name,email,hashed,token], function(err){
             if(err) return res.redirect('/login?error=Erro ao registar');
-            sendEmail(email, "Ativar Conta", `Link: http://${req.headers.host}/verify/${token}`);
+            
+            // Envia Email (ou Log)
+            sendEmail(email, "Ativar Conta LegoTracker", `Clique aqui para ativar: http://${req.headers.host}/verify/${token}`);
             
             if(this.lastID===1) db.run("INSERT OR IGNORE INTO user_sets (user_id, set_num) SELECT 1, set_num FROM sets WHERE owned=1");
-            res.redirect('/login?success=Registo efetuado. Verifique o seu email (ou consola).');
+            res.redirect('/login?success=Registo efetuado! Verifique a sua caixa de correio (ou o terminal do servidor).');
         });
     } catch(e) { res.redirect('/login?error=Erro no servidor'); }
 });
 
 app.get('/verify/:token', (req, res) => {
     db.get("SELECT id FROM users WHERE verify_token=?", [req.params.token], (e,u) => {
-        if(!u) return res.redirect('/login?error=Token inválido');
-        db.run("UPDATE users SET is_verified=1, verify_token=NULL WHERE id=?", [u.id], ()=> res.redirect('/login?success=Conta ativada!'));
+        if(!u) return res.redirect('/login?error=Link inválido ou expirado.');
+        db.run("UPDATE users SET is_verified=1, verify_token=NULL WHERE id=?", [u.id], ()=> res.redirect('/login?success=Conta ativada com sucesso!'));
     });
 });
 
