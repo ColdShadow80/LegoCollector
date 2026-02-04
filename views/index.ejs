@@ -11,7 +11,6 @@
         .set-card img { height: 160px; object-fit: contain; padding: 5px; transition: transform 0.2s; }
         .set-card:hover img { transform: scale(1.05); }
         
-        /* Dark Mode overrides */
         [data-bs-theme="dark"] .card { background-color: #2b3035; border-color: #495057; }
         [data-bs-theme="dark"] .is-owned { background-color: #1a4d2e !important; border-color: #2ea043; }
         [data-bs-theme="light"] .is-owned { border: 2px solid #198754; background-color: #f0fff4; }
@@ -81,7 +80,6 @@
 
                 <div class="mb-3">
                     <label class="form-label small fw-bold">Temas</label>
-                    
                     <input type="text" id="themeSearchInput" class="form-control form-control-sm mb-2" placeholder="Filtrar lista..." autocomplete="off">
 
                     <div class="sidebar-scroll border rounded p-2 bg-body-tertiary" id="themeListContainer">
