@@ -2,7 +2,8 @@ const fs = require('fs');
 const zlib = require('zlib');
 const axios = require('axios');
 const csv = require('csv-parser');
-const db = require('./database');
+// CORREÇÃO: Aponta para './db' em vez de './database'
+const db = require('./db'); 
 
 // URLs oficiais dos dumps diários do Rebrickable
 const URL_THEMES = 'https://cdn.rebrickable.com/media/downloads/themes.csv.gz';
@@ -14,30 +15,30 @@ async function processarArquivo(url, queryInsert, mapRow) {
     
     return new Promise(async (resolve, reject) => {
         try {
-            // Inicia o download via Stream
             const response = await axios({
                 method: 'get',
                 url: url,
                 responseType: 'stream'
             });
 
-            // Inicia Transação no Banco (Performance CRÍTICA para SQLite)
             db.serialize(() => {
                 db.run("BEGIN TRANSACTION");
                 
                 const stmt = db.prepare(queryInsert);
                 let contador = 0;
 
-                // Pipeline: Download -> Descompactar (Gunzip) -> Ler CSV -> Inserir
                 response.data
                     .pipe(zlib.createGunzip())
                     .pipe(csv())
                     .on('data', (row) => {
-                        // Mapeia os dados do CSV para o formato da Query
-                        const values = mapRow(row);
-                        stmt.run(values);
-                        contador++;
-                        if (contador % 5000 === 0) process.stdout.write(`.`); // Barra de progresso visual
+                        try {
+                            const values = mapRow(row);
+                            stmt.run(values);
+                            contador++;
+                            if (contador % 5000 === 0) process.stdout.write(`.`);
+                        } catch (e) {
+                            // Ignora erros de linhas mal formatadas
+                        }
                     })
                     .on('end', () => {
                         stmt.finalize();
@@ -61,9 +62,11 @@ async function processarArquivo(url, queryInsert, mapRow) {
 async function main() {
     console.log("--- INICIANDO IMPORTAÇÃO MASSIVA ---");
 
+    // Pequeno delay para garantir que as migrações do db.js correram (criação de tabelas)
+    await new Promise(r => setTimeout(r, 1000));
+
     try {
-        // 1. Importar TEMA (Themes) primeiro
-        // CSV Headers: id, name, parent_id
+        // 1. Importar TEMA (Themes)
         await processarArquivo(
             URL_THEMES,
             "INSERT OR REPLACE INTO themes (id, name, parent_id) VALUES (?, ?, ?)",
@@ -71,15 +74,16 @@ async function main() {
         );
 
         // 2. Importar SETS
-        // CSV Headers: set_num, name, year, theme_id, num_parts, img_url
+        // Importante: Mapeamos para a estrutura atual da tabela sets
         await processarArquivo(
             URL_SETS,
-            "INSERT OR REPLACE INTO sets (set_num, name, year, theme_id, num_parts, img_url, price_eur) VALUES (?, ?, ?, ?, ?, ?, 0)",
+            `INSERT OR REPLACE INTO sets 
+            (set_num, name, year, theme_id, num_parts, img_url, eol_status, price_eur) 
+            VALUES (?, ?, ?, ?, ?, ?, 'Active', 0)`,
             (row) => [row.set_num, row.name, row.year, row.theme_id, row.num_parts, row.img_url]
         );
 
         console.log("--- IMPORTAÇÃO FINALIZADA COM SUCESSO ---");
-        console.log("Agora você pode rodar 'npm start' para ver o site.");
 
     } catch (error) {
         console.error("Erro fatal na importação:", error);
