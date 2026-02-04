@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LegoTracker V3</title>
+    <title>LegoTracker V5</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
     <style>
@@ -11,6 +11,7 @@
         .set-card img { height: 160px; object-fit: contain; padding: 5px; transition: transform 0.2s; }
         .set-card:hover img { transform: scale(1.05); }
         
+        /* Dark Mode overrides */
         [data-bs-theme="dark"] .card { background-color: #2b3035; border-color: #495057; }
         [data-bs-theme="dark"] .is-owned { background-color: #1a4d2e !important; border-color: #2ea043; }
         [data-bs-theme="light"] .is-owned { border: 2px solid #198754; background-color: #f0fff4; }
@@ -41,6 +42,14 @@
                         👤 <%= user.name %>
                     </button>
                     <ul class="dropdown-menu dropdown-menu-end">
+                        
+                        <% if (user.id === 1) { %>
+                            <li><h6 class="dropdown-header">Administração</h6></li>
+                            <li><a class="dropdown-item" href="/admin/themes">🛠️ Gerir Temas</a></li>
+                            <li><a class="dropdown-item" href="/admin/users">👥 Gerir Utilizadores</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                        <% } %>
+
                         <li><a class="dropdown-item" href="/">Minha Coleção</a></li>
                         <li><hr class="dropdown-divider"></li>
                         <li><a class="dropdown-item text-danger" href="/logout">Sair</a></li>
@@ -80,6 +89,7 @@
 
                 <div class="mb-3">
                     <label class="form-label small fw-bold">Temas</label>
+                    
                     <input type="text" id="themeSearchInput" class="form-control form-control-sm mb-2" placeholder="Filtrar lista..." autocomplete="off">
 
                     <div class="sidebar-scroll border rounded p-2 bg-body-tertiary" id="themeListContainer">
@@ -217,6 +227,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
+    // FILTRO DE TEMAS NA SIDEBAR
     document.addEventListener("DOMContentLoaded", function() {
         const searchInput = document.getElementById('themeSearchInput');
         const listContainer = document.getElementById('themeListContainer');
@@ -247,6 +258,7 @@
         }
     });
 
+    // NAVEGAÇÃO E PREFS
     function changeLimit(val) {
         document.getElementById('limitInput').value = val;
         <% if (user) { %> savePreference('items_per_page', val); <% } %>
@@ -269,6 +281,7 @@
         form.submit();
     }
     
+    // DARK MODE
     const dmSwitch = document.getElementById('darkModeSwitch');
     if (dmSwitch) {
         dmSwitch.addEventListener('change', (e) => {
@@ -282,6 +295,7 @@
         try { fetch('/api/preferences', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({[key]: value}) }); } catch(e){}
     }
 
+    // TOGGLE SET (ADICIONAR/REMOVER)
     async function toggleSet(setNum, btn) {
         const isRemoving = btn.classList.contains('btn-outline-danger');
         const newState = !isRemoving;
