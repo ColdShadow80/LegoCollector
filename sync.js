@@ -5,17 +5,24 @@ const db = require('./db');
 const API_KEY = process.env.REBRICKABLE_API_KEY;
 const BASE_URL = 'https://rebrickable.com/api/v3/lego';
 
-// Obtém o ano atual do sistema (2026 no seu caso)
+// Obtém o ano atual do sistema
 const CURRENT_YEAR = new Date().getFullYear();
 
-// Função auxiliar para verificar se um ano precisa de reparação
-// Retorna TRUE se existirem sets desse ano com 0 peças na BD local
+// Função auxiliar INTELIGENTE:
+// Só pede reparação se existirem sets com 0 peças EM TEMAS QUE NÃO DEVEMOS IGNORAR.
 async function checkYearNeedsRepair(year) {
     return new Promise((resolve, reject) => {
-        const sql = "SELECT COUNT(*) as count FROM sets WHERE year = ? AND num_parts = 0";
+        const sql = `
+            SELECT COUNT(*) as count 
+            FROM sets 
+            JOIN themes ON sets.theme_id = themes.id
+            WHERE sets.year = ? 
+            AND sets.num_parts = 0 
+            AND (themes.ignore_parts IS NULL OR themes.ignore_parts = 0)
+        `;
+        
         db.get(sql, [year], (err, row) => {
             if (err) reject(err);
-            // Se count > 0, significa que temos sets incompletos e precisamos de ir à API
             else resolve(row.count > 0);
         });
     });
@@ -25,7 +32,6 @@ async function syncSets(year) {
     console.log(`\n📡 A sincronizar SETS de ${year}...`);
     let nextUrl = `${BASE_URL}/sets/?min_year=${year}&max_year=${year}&page_size=500`;
     let count = 0;
-    let newSets = 0;
     let updatedSets = 0;
 
     try {
@@ -36,30 +42,15 @@ async function syncSets(year) {
                 db.serialize(() => {
                     db.run("BEGIN TRANSACTION");
                     
-                    // QUERY INTELIGENTE:
-                    // 1. Tenta Inserir (Se for novo)
-                    // 2. Se já existe (Conflito), SÓ atualiza se o set local tiver 0 peças
-                    //    (Exceto no ano corrente/futuro, onde atualizamos tudo pois imagens/nomes mudam muito)
                     const isVolatileYear = year >= CURRENT_YEAR;
                     
+                    // Se for ano atual/futuro: Atualiza tudo.
+                    // Se for passado: Só atualiza se tivermos 0 peças.
                     let conflictClause;
                     if (isVolatileYear) {
-                        // Ano atual/futuro: Atualiza tudo (nomes, imagens, peças)
-                        conflictClause = `
-                            DO UPDATE SET 
-                            name=excluded.name, 
-                            img_url=excluded.img_url, 
-                            num_parts=excluded.num_parts, 
-                            theme_id=excluded.theme_id
-                        `;
+                        conflictClause = `DO UPDATE SET name=excluded.name, img_url=excluded.img_url, num_parts=excluded.num_parts, theme_id=excluded.theme_id`;
                     } else {
-                        // Ano passado: Só atualiza se o nosso nº de peças for 0
-                        conflictClause = `
-                            DO UPDATE SET 
-                            num_parts=excluded.num_parts,
-                            img_url=excluded.img_url
-                            WHERE sets.num_parts = 0
-                        `;
+                        conflictClause = `DO UPDATE SET num_parts=excluded.num_parts, img_url=excluded.img_url WHERE sets.num_parts = 0`;
                     }
 
                     const stmt = db.prepare(`
@@ -70,8 +61,7 @@ async function syncSets(year) {
 
                     res.data.results.forEach(s => {
                         if(s.set_num && s.name) {
-                            stmt.run(s.set_num, s.name, s.year, s.theme_id, s.num_parts, s.set_img_url, function(err) {
-                                // this.changes dá-nos pistas se houve escrita
+                            stmt.run(s.set_num, s.name, s.year, s.theme_id, s.num_parts, s.set_img_url, function() {
                                 if (this.changes > 0) updatedSets++; 
                             });
                         }
@@ -84,7 +74,7 @@ async function syncSets(year) {
 
             count += res.data.results.length;
             nextUrl = res.data.next;
-            process.stdout.write("."); // Feedback visual
+            process.stdout.write("."); 
         }
         console.log(`\n✅ ${year}: ${count} sets analisados.`);
     } catch (e) { 
@@ -93,35 +83,29 @@ async function syncSets(year) {
     }
 }
 
-// --- LOGICA PRINCIPAL DE DECISÃO ---
+// LÓGICA DE DECISÃO
 (async () => {
     const yearsToSync = [];
 
-    // 1. Regra: Ano Atual e Próximo são OBRIGATÓRIOS 
-    // (Para descobrir sets novos que não existem na BD)
+    // 1. Anos Obrigatórios (Atual e Futuro)
     yearsToSync.push(CURRENT_YEAR);
     yearsToSync.push(CURRENT_YEAR + 1);
 
-    // 2. Regra: Ano Anterior APENAS se houver dados em falta
+    // 2. Ano Anterior (Só se necessário e se o tema não for ignorado)
     const prevYear = CURRENT_YEAR - 1;
     const needsRepair = await checkYearNeedsRepair(prevYear);
     
     if (needsRepair) {
-        console.log(`🔍 Diagnóstico: Encontrados sets de ${prevYear} com 0 peças. A agendar atualização...`);
+        console.log(`🔍 Diagnóstico: Encontrados sets de ${prevYear} incompletos em temas relevantes.`);
         yearsToSync.push(prevYear);
     } else {
-        console.log(`⏭️ Diagnóstico: Todos os sets de ${prevYear} parecem completos. A saltar sincronização deste ano.`);
+        console.log(`⏭️ Diagnóstico: ${prevYear} está completo ou só tem sets em temas ignorados (Livros, etc).`);
     }
 
-    // 3. Execução
-    // Ordena para ficar bonito no log (Ex: 2025, 2026, 2027)
     yearsToSync.sort();
+    console.log(`📋 Plano: [ ${yearsToSync.join(', ')} ]`);
 
-    console.log(`📋 Plano de Sincronização: [ ${yearsToSync.join(', ')} ]`);
-
-    for (let y of yearsToSync) {
-        await syncSets(y);
-    }
+    for (let y of yearsToSync) await syncSets(y);
     
     console.log("🏁 Sincronização inteligente concluída.");
 })();
