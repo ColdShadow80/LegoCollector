@@ -30,6 +30,12 @@ const MIGRATIONS = [
     // V3: Preferências de Utilizador (Modo Escuro e Paginação)
     `ALTER TABLE users ADD COLUMN dark_mode INTEGER DEFAULT 0;
      ALTER TABLE users ADD COLUMN items_per_page INTEGER DEFAULT 25;`
+    	
+    // V4: SEGURANÇA E EMAIL (NOVO)
+    `ALTER TABLE users ADD COLUMN is_verified INTEGER DEFAULT 0;
+     ALTER TABLE users ADD COLUMN verify_token TEXT;
+     ALTER TABLE users ADD COLUMN reset_token TEXT;
+     ALTER TABLE users ADD COLUMN reset_expires INTEGER;` 
 ];
 
 function runMigrations() {
