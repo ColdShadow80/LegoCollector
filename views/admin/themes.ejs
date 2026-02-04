@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="pt" data-bs-theme="<%= user.dark_mode ? 'dark' : 'light' %>">
+<head>
+    <meta charset="UTF-8">
+    <title>Gestão de Temas - Admin</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="p-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3>🛠️ Gestão de Temas</h3>
+        <a href="/" class="btn btn-outline-secondary">Voltar ao Site</a>
+    </div>
+
+    <input type="text" id="searchTheme" class="form-control mb-3" placeholder="Filtrar temas...">
+
+    <div class="table-responsive" style="max-height: 80vh; overflow-y: auto;">
+        <table class="table table-sm table-hover table-bordered">
+            <thead class="table-light sticky-top">
+                <tr>
+                    <th>Nome</th>
+                    <th>Anos</th>
+                    <th class="text-center">Total Sets</th>
+                    <th class="text-center">Sets (0 Pçs)</th>
+                    <th class="text-center bg-warning-subtle">Ocultar do Site</th>
+                    <th class="text-center bg-danger-subtle">Ignorar Peças (Sync)</th>
+                </tr>
+            </thead>
+            <tbody id="themeTable">
+                <% themes.forEach(t => { %>
+                    <tr>
+                        <td><%= t.name %></td>
+                        <td class="small text-muted"><%= t.min_year %> - <%= t.max_year %></td>
+                        <td class="text-center"><%= t.total_sets %></td>
+                        <td class="text-center <%= t.zero_part_sets > 0 ? 'text-danger fw-bold' : '' %>"><%= t.zero_part_sets %></td>
+                        <td class="text-center">
+                            <input type="checkbox" class="form-check-input" <%= t.is_hidden ? 'checked' : '' %> onchange="toggleTheme(<%= t.id %>, 'is_hidden', this.checked)">
+                        </td>
+                        <td class="text-center">
+                            <input type="checkbox" class="form-check-input" <%= t.ignore_parts ? 'checked' : '' %> onchange="toggleTheme(<%= t.id %>, 'ignore_parts', this.checked)">
+                        </td>
+                    </tr>
+                <% }) %>
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        document.getElementById('searchTheme').addEventListener('keyup', function(e) {
+            const term = e.target.value.toLowerCase();
+            document.querySelectorAll('#themeTable tr').forEach(row => {
+                row.style.display = row.cells[0].textContent.toLowerCase().includes(term) ? '' : 'none';
+            });
+        });
+        async function toggleTheme(id, field, value) {
+            try { await fetch('/admin/themes/toggle', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ theme_id: id, field, value })}); } catch(e) { alert('Erro'); }
+        }
+    </script>
+</body>
+</html>
