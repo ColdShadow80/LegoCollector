@@ -15,10 +15,12 @@ const MIGRATIONS = [
     `ALTER TABLE users ADD COLUMN is_verified INTEGER DEFAULT 0; ALTER TABLE users ADD COLUMN verify_token TEXT; ALTER TABLE users ADD COLUMN reset_token TEXT; ALTER TABLE users ADD COLUMN reset_expires INTEGER;`,
     // V5
     `ALTER TABLE themes ADD COLUMN is_hidden INTEGER DEFAULT 0; ALTER TABLE themes ADD COLUMN ignore_parts INTEGER DEFAULT 0; ALTER TABLE users ADD COLUMN last_login DATETIME;`,
+    // V6
+    `ALTER TABLE sets ADD COLUMN is_hidden INTEGER DEFAULT 0; ALTER TABLE sets ADD COLUMN ignore_parts INTEGER DEFAULT 0;`,
     
-    // V6: CONTROLO INDIVIDUAL DE SETS (NOVO)
-    `ALTER TABLE sets ADD COLUMN is_hidden INTEGER DEFAULT 0;
-     ALTER TABLE sets ADD COLUMN ignore_parts INTEGER DEFAULT 0;`
+    // V7: WISHLIST E QUANTIDADE (NOVO)
+    `ALTER TABLE user_sets ADD COLUMN status TEXT DEFAULT 'OWNED'; -- 'OWNED' ou 'WANTED'
+     ALTER TABLE user_sets ADD COLUMN quantity INTEGER DEFAULT 1;`
 ];
 
 function runMigrations() {
