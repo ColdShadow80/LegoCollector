@@ -1,7 +1,7 @@
 require('dotenv').config();
 const axios = require('axios');
 const db = require('./db');
-const querystring = require('querystring'); // Nativo do Node.js
+const querystring = require('querystring');
 
 const RB_API_KEY = process.env.REBRICKABLE_API_KEY;
 const BS_API_KEY = process.env.BRICKSET_API_KEY;
@@ -43,7 +43,7 @@ async function syncRebrickable(year) {
     } catch (e) { console.error(`\n❌ [Rebrickable] Erro:`, e.message); }
 }
 
-// --- 2. PREÇOS (BRICKSET) - AGORA COM POST E DEBUG ---
+// --- 2. PREÇOS (BRICKSET) - COM PROTEÇÃO DE LIMITE ---
 async function syncBricksetPricesForYear(year) {
     if (!BS_API_KEY) return;
 
@@ -66,12 +66,10 @@ async function syncBricksetPricesForYear(year) {
 
     for (let i = 0; i < setsToUpdate.length; i += CHUNK_SIZE) {
         const chunk = setsToUpdate.slice(i, i + CHUNK_SIZE);
-        // Remover variante "-1" para enviar ao Brickset
         const baseNumbers = chunk.map(s => s.set_num.split('-')[0]);
         const uniqueQuery = [...new Set(baseNumbers)].join(',');
 
         try {
-            // USAR POST (Mais seguro para parâmetros JSON)
             const postBody = querystring.stringify({
                 apiKey: BS_API_KEY,
                 userHash: '',
@@ -83,21 +81,18 @@ async function syncBricksetPricesForYear(year) {
                 timeout: 15000
             });
 
-            // --- DEBUG DO PRIMEIRO LOTE (Para vermos o erro) ---
-            if (i === 0 && processedCount === 0) {
-                console.log("\n--- DEBUG API BRICKSET (Primeiro Lote) ---");
-                if (response.data.status !== 'success') {
-                    console.log("STATUS:", response.data.status);
-                    console.log("MESSAGE:", response.data.message);
-                } else if (response.data.sets.length > 0) {
-                    console.log("EXEMPLO DE RESPOSTA:", JSON.stringify(response.data.sets[0].LEGOCom, null, 2));
-                } else {
-                    console.log("⚠️ A API retornou sucesso, mas lista de sets vazia.");
-                    console.log("Query enviada:", uniqueQuery);
+            // --- PROTEÇÃO DE LIMITE DA API (KILL SWITCH) ---
+            if (response.data.status === 'error') {
+                console.error(`\n\n❌ [Brickset] ERRO CRÍTICO NA API: ${response.data.message}`);
+                
+                if (response.data.message.includes('limit') || response.data.message.includes('throttled')) {
+                    console.log("🛑 A INTERROMPER IMEDIATAMENTE: Limite da API excedido.");
+                    console.log("   O script vai parar de pedir preços para evitar ban.");
+                    console.log("   Tente novamente daqui a 24 horas.");
+                    return; // <--- SAI DA FUNÇÃO IMEDIATAMENTE
                 }
-                console.log("------------------------------------------\n");
             }
-            // ----------------------------------------------------
+            // ------------------------------------------------
 
             if (response.data && response.data.sets) {
                 let batchCount = 0;
@@ -108,19 +103,15 @@ async function syncBricksetPricesForYear(year) {
 
                         response.data.sets.forEach(bSet => {
                             let price = null;
-
-                            // VERIFICAÇÃO ROBUSTA DE PREÇO
                             if (bSet.LEGOCom) {
                                 if (bSet.LEGOCom.DE) price = bSet.LEGOCom.DE.retailPrice;
                                 else if (bSet.LEGOCom.FR) price = bSet.LEGOCom.FR.retailPrice;
                                 else if (bSet.LEGOCom.ES) price = bSet.LEGOCom.ES.retailPrice;
                                 else if (bSet.LEGOCom.IT) price = bSet.LEGOCom.IT.retailPrice;
-                                else if (bSet.LEGOCom.US) price = bSet.LEGOCom.US.retailPrice; // Fallback
+                                else if (bSet.LEGOCom.US) price = bSet.LEGOCom.US.retailPrice;
                             }
 
                             if (price) {
-                                // Tenta atualizar com variante -1, -2, etc. (O mais comum é -1)
-                                // Se a DB tiver 75300-1 e a API devolver 75300 e variante 1, bate certo.
                                 const setNumVariant = `${bSet.number}-${bSet.numberVariant}`;
                                 stmt.run(price, setNumVariant);
                                 batchCount++;
@@ -133,13 +124,15 @@ async function syncBricksetPricesForYear(year) {
                 totalUpdated += batchCount;
             }
         } catch (e) {
-            // Ignora erros de rede pontuais para não parar o script
+            // Se for erro de rede, continua. Se for erro de API verificado acima, já saiu.
         }
 
         processedCount += chunk.length;
         const percent = Math.round((processedCount / setsToUpdate.length) * 100);
         process.stdout.write(`\r   ⏳ Progresso: [ ${processedCount} / ${setsToUpdate.length} ] (${percent}%) - Atualizados: ${totalUpdated}`);
-        await new Promise(r => setTimeout(r, 1000));
+        
+        // Pausa de 2 segundos para ser mais "gentil" com a API
+        await new Promise(r => setTimeout(r, 2000));
     }
     process.stdout.write("\n");
 }
