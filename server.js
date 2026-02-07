@@ -114,34 +114,38 @@ function buildFilters(query, userId, isAdminView = false) {
     return { whereClause, params };
 }
 
-// --- NOVAS ROTAS (V11) ---
+// --- ROTAS NOVAS (V11) ---
 
-// 1. Rota do Manual
 app.get('/manual', (req, res) => {
     res.render('manual', { user: req.user });
 });
 
-// 2. ROTA API: SCANNER INTELIGENTE (V11.1)
+// ROTA API: SCANNER COM LOGS DE DEBUG
 app.get('/api/scan', async (req, res) => {
     if (!req.user) return res.status(401).send();
-    const { code } = req.query; // Pode ser "570201..." OU "75360"
+    const { code } = req.query;
 
     if (!code) return res.status(400).json({ error: 'Código inválido' });
 
-    // Limpar o código (remover espaços ou traços)
     const cleanCode = code.trim();
     let foundSetNum = null;
+    let debugLog = []; // Vamos guardar o histórico para enviar ao frontend
+
+    console.log(`\n🔍 [SCANNER] Recebido: "${cleanCode}"`);
+    debugLog.push(`Recebido: ${cleanCode}`);
 
     try {
-        // CASO 1: É UM NÚMERO DE SET DIRETO? (ex: "75360" ou "75360-1")
-        // Se tiver menos de 8 dígitos, assumimos que é o número do set, não um código de barras.
+        // CASO 1: É SET DIRETO?
         if (cleanCode.length < 8) {
             foundSetNum = cleanCode.includes('-') ? cleanCode : `${cleanCode}-1`;
+            console.log(`   > Assumido como Nº Set: ${foundSetNum}`);
+            debugLog.push(`Assumido como Set: ${foundSetNum}`);
         } 
-        // CASO 2: É UM CÓDIGO DE BARRAS (EAN/UPC)?
+        // CASO 2: É CÓDIGO DE BARRAS?
         else {
             if (process.env.BRICKSET_API_KEY) {
                 try {
+                    console.log(`   > A perguntar ao Brickset...`);
                     const bsParams = JSON.stringify({ query: cleanCode });
                     const bsUrl = `https://brickset.com/api/v3.asmx/getSets?apiKey=${process.env.BRICKSET_API_KEY}&userHash=&params=${encodeURIComponent(bsParams)}`;
                     
@@ -150,22 +154,37 @@ app.get('/api/scan', async (req, res) => {
                     if (bsRes.data && bsRes.data.sets && bsRes.data.sets.length > 0) {
                         const match = bsRes.data.sets[0];
                         foundSetNum = `${match.number}-${match.numberVariant}`;
+                        console.log(`   ✅ Brickset Encontrou: ${foundSetNum} (${match.name})`);
+                        debugLog.push(`Brickset: Sucesso -> ${foundSetNum}`);
+                    } else {
+                        console.log(`   ❌ Brickset: Não encontrado.`);
+                        debugLog.push(`Brickset: Não encontrado`);
                     }
-                } catch (err) { console.error("Erro Brickset:", err.message); }
+                } catch (err) { 
+                    console.error(`   ⚠️ Erro Brickset: ${err.message}`);
+                    debugLog.push(`Erro Brickset: ${err.message}`);
+                }
             }
             
-            // Fallback Rebrickable Search se Brickset falhar
+            // Fallback Rebrickable
             if (!foundSetNum) {
+                console.log(`   > A tentar Rebrickable Search...`);
                 const rbUrl = `https://rebrickable.com/api/v3/lego/sets/?search=${cleanCode}&page_size=1`;
                 const rbRes = await axios.get(rbUrl, { headers: { 'Authorization': `key ${process.env.REBRICKABLE_API_KEY}` }});
                 if (rbRes.data.results && rbRes.data.results.length > 0) {
                     foundSetNum = rbRes.data.results[0].set_num;
+                    console.log(`   ✅ Rebrickable Encontrou: ${foundSetNum}`);
+                    debugLog.push(`Rebrickable Search: Sucesso -> ${foundSetNum}`);
+                } else {
+                    console.log(`   ❌ Rebrickable: Nada.`);
+                    debugLog.push(`Rebrickable Search: Nada`);
                 }
             }
         }
 
         // 3. BUSCAR DETALHES FINAIS
         if (foundSetNum) {
+            console.log(`   > A obter detalhes finais para: ${foundSetNum}`);
             const detailsUrl = `https://rebrickable.com/api/v3/lego/sets/${foundSetNum}/`;
             const detailsRes = await axios.get(detailsUrl, { headers: { 'Authorization': `key ${process.env.REBRICKABLE_API_KEY}` }});
             const set = detailsRes.data;
@@ -173,6 +192,7 @@ app.get('/api/scan', async (req, res) => {
             db.get("SELECT status FROM user_sets WHERE user_id = ? AND set_num = ?", [req.user.id, set.set_num], (err, row) => {
                 res.json({
                     found: true,
+                    debug: debugLog,
                     set: {
                         set_num: set.set_num,
                         name: set.name,
@@ -184,12 +204,14 @@ app.get('/api/scan', async (req, res) => {
                 });
             });
         } else {
-            res.json({ found: false });
+            console.log(`🏁 [SCANNER] Resultado Final: FALSO (Não encontrado em lado nenhum)`);
+            res.json({ found: false, debug: debugLog, scanned_code: cleanCode });
         }
 
     } catch (e) {
-        // Se der 404 (Set não existe no Rebrickable), retorna false
-        res.json({ found: false }); 
+        console.error(`💥 ERRO FATAL SCANNER: ${e.message}`);
+        // Se der 404 no detalhe final, devolve não encontrado
+        res.json({ found: false, debug: debugLog, error: e.message }); 
     }
 });
 
@@ -405,7 +427,7 @@ app.post('/api/user_set/update', (req, res) => {
 app.post('/api/preferences', (req, res) => { if (!req.user) return res.status(401).send(); const { dark_mode, items_per_page } = req.body; let sql="UPDATE users SET ", p=[], u=[]; if(dark_mode!==undefined) {u.push("dark_mode=?"); p.push(dark_mode?1:0);} if(items_per_page!==undefined) {u.push("items_per_page=?"); p.push(items_per_page);} if(u.length) { sql+=u.join(",")+" WHERE id=?"; p.push(req.user.id); db.run(sql,p,()=>res.json({ok:true})); } else res.json({ok:true}); });
 
 // ADMIN (Igual)
-app.get('/admin/sets', ensureAdmin, (req, res) => { let { limit, page } = req.query; let limitVal = limit || 50; let pageVal = parseInt(page) || 1; let offset = (pageVal - 1) * limitVal; const filter = buildFilters(req.query, req.user.id, true); let countSql = `SELECT COUNT(*) as total FROM sets LEFT JOIN themes ON sets.theme_id = themes.id ${filter.whereClause}`; db.get(countSql, filter.params, (err, row) => { const totalItems = row ? row.total : 0; const totalPages = Math.ceil(totalItems / limitVal); let dataSql = `SELECT sets.*, themes.name as theme_name FROM sets LEFT JOIN themes ON sets.theme_id = themes.id ${filter.whereClause} ORDER BY sets.year DESC, sets.name ASC LIMIT ? OFFSET ?`; db.all(dataSql, [...filter.params, limitVal, offset], (err, sets) => { let themesSql = `SELECT themes.name, MIN(sets.year) as min_year, MAX(sets.year) as max_year FROM themes JOIN sets ON themes.id = sets.theme_id GROUP BY themes.name ORDER BY themes.name ASC`; db.all(themesSql, [], (e1, allThemes) => { db.all("SELECT DISTINCT year FROM sets ORDER BY year DESC", [], (e2, allYears) => { res.render('admin/sets', { sets: sets || [], allThemes: allThemes || [], allYears: allYears || [], query: req.query, pagination: { page: pageVal, limit: limitVal, totalPages, totalItems }, user: req.user }); }); }); }); }); });
+app.get('/admin/sets', ensureAdmin, (req, res) => { let { limit, page } = req.query; let limitVal = limit || 50; let pageVal = parseInt(page) || 1; let offset = (pageVal - 1) * limitVal; const filter = buildFilters(req.query, req.user.id, true); let countSql = `SELECT COUNT(*) as total FROM sets LEFT JOIN themes ON sets.theme_id = themes.id ${filter.whereClause}`; db.get(countSql, filter.params, (err, row) => { const totalItems = row ? row.total : 0; const totalPages = Math.ceil(totalItems / limitVal); let dataSql = `SELECT sets.*, themes.name as theme_name FROM sets LEFT JOIN themes ON sets.theme_id = themes.id ${filter.whereClause} ORDER BY sets.year DESC, sets.name ASC LIMIT ? OFFSET ?`; db.all(dataSql, [...filter.params, limitVal, offset], (err, sets) => { let themesSql = `SELECT themes.name, MIN(sets.year) as min_year, MAX(sets.year) as max_year FROM themes JOIN sets ON themes.id = sets.theme_id GROUP BY themes.name ORDER BY themes.name ASC`; db.all(themesSql, [], (e1, allThemes) => { db.all("SELECT DISTINCT year FROM sets ORDER BY year DESC", [], (e2, allYears) => { res.render('admin/sets', { sets: sets || [], allThemes: allThemes || [], allYears: allYears || [], query: req.query, pagination: { page: pageVal, limit: limitVal, totalPages, totalItems }, user: req.user, currentYear: new Date().getFullYear() }); }); }); }); }); });
 app.post('/admin/sets/toggle', ensureAdmin, (req, res) => { const { set_num, field, value } = req.body; if (!['is_hidden', 'ignore_parts'].includes(field)) return res.status(400).send(); db.run(`UPDATE sets SET ${field} = ? WHERE set_num = ?`, [value ? 1 : 0, set_num], (err) => res.json({success: !err})); });
 app.get('/admin/themes', ensureAdmin, (req, res) => { const sql = `SELECT t.id, t.name, t.is_hidden, t.ignore_parts, COUNT(s.set_num) as total_sets, SUM(CASE WHEN s.num_parts = 0 THEN 1 ELSE 0 END) as zero_part_sets, MIN(s.year) as min_year, MAX(s.year) as max_year FROM themes t LEFT JOIN sets s ON t.id = s.theme_id GROUP BY t.id ORDER BY t.name ASC`; db.all(sql, [], (err, themes) => res.render('admin/themes', { themes: themes || [], user: req.user })); });
 app.post('/admin/themes/toggle', ensureAdmin, (req, res) => { const { theme_id, field, value } = req.body; if (!['is_hidden', 'ignore_parts'].includes(field)) return res.status(400).send(); db.run(`UPDATE themes SET ${field} = ? WHERE id = ?`, [value ? 1 : 0, theme_id], (err) => res.json({success: !err})); });
