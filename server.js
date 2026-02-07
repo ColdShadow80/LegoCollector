@@ -88,41 +88,58 @@ app.use((req, res, next) => {
     next();
 });
 
-// --- LÓGICA DE FILTROS ---
 function buildFilters(query, userId, isAdminView = false) {
     let { themes, year, search, status } = query;
     let whereClause = "WHERE 1=1";
     let params = [];
-
-    if (themes) {
-        const list = Array.isArray(themes) ? themes : [themes];
-        whereClause += ` AND themes.name IN (${list.map(() => '?').join(',')})`;
-        params.push(...list);
-    }
+    if (themes) { const list = Array.isArray(themes) ? themes : [themes]; whereClause += ` AND themes.name IN (${list.map(() => '?').join(',')})`; params.push(...list); }
     if (year) { whereClause += " AND sets.year = ?"; params.push(year); }
     if (search) { whereClause += " AND (sets.name LIKE ? OR sets.set_num LIKE ?)"; params.push(`%${search}%`, `%${search}%`); }
-
     if (!isAdminView) {
-        whereClause += " AND (themes.is_hidden IS NULL OR themes.is_hidden = 0)";
-        whereClause += " AND (sets.is_hidden IS NULL OR sets.is_hidden = 0)";
-        
+        whereClause += " AND (themes.is_hidden IS NULL OR themes.is_hidden = 0) AND (sets.is_hidden IS NULL OR sets.is_hidden = 0)";
         if (userId) {
-            if (status === 'owned') {
-                whereClause += " AND user_sets.user_id = ? AND user_sets.status = 'OWNED'";
-                params.push(userId);
-            } else if (status === 'wanted') {
-                whereClause += " AND user_sets.user_id = ? AND user_sets.status = 'WANTED'";
-                params.push(userId);
-            } else if (!themes && !year && !search) {
-                whereClause += " AND user_sets.user_id = ?";
-                params.push(userId);
-            }
+            if (status === 'owned') { whereClause += " AND user_sets.user_id = ? AND user_sets.status = 'OWNED'"; params.push(userId); }
+            else if (status === 'wanted') { whereClause += " AND user_sets.user_id = ? AND user_sets.status = 'WANTED'"; params.push(userId); }
+            else if (!themes && !year && !search) { whereClause += " AND user_sets.user_id = ?"; params.push(userId); }
         }
     }
     return { whereClause, params };
 }
 
-// --- ROTA PRINCIPAL (AGORA COM ORDENAÇÃO) ---
+// --- ROTA DASHBOARD (FINANCEIRO) ---
+app.get('/dashboard', (req, res) => {
+    if (!req.user) return res.redirect('/login');
+    const userId = req.user.id;
+
+    // 1. ESTATÍSTICAS GERAIS (INCLUINDO PVP vs CUSTO)
+    const q1 = new Promise(r => db.get(`
+        SELECT 
+            COUNT(*) as total_sets, 
+            SUM(quantity) as total_items, 
+            SUM(sets.num_parts * user_sets.quantity) as total_parts,
+            COALESCE(SUM(user_sets.purchase_price * user_sets.quantity), 0) as total_spent,
+            COALESCE(SUM(sets.price_eur * user_sets.quantity), 0) as total_value_rrp
+        FROM user_sets JOIN sets ON user_sets.set_num = sets.set_num 
+        WHERE user_id = ? AND status = 'OWNED'`, [userId], (e, row) => r(row)));
+
+    const q2 = new Promise(r => db.get(`SELECT COUNT(*) as wanted_count, COALESCE(SUM(sets.price_eur), 0) as wanted_value FROM user_sets JOIN sets ON user_sets.set_num = sets.set_num WHERE user_id = ? AND status = 'WANTED'`, [userId], (e, row) => r(row)));
+
+    const q3 = new Promise(r => db.all(`SELECT themes.name, COUNT(*) as count FROM user_sets JOIN sets ON user_sets.set_num = sets.set_num JOIN themes ON sets.theme_id = themes.id WHERE user_sets.user_id = ? AND user_sets.status = 'OWNED' GROUP BY themes.name ORDER BY count DESC LIMIT 5`, [userId], (e, rows) => r(rows)));
+
+    const q4 = new Promise(r => db.all(`SELECT sets.year, COUNT(*) as count FROM user_sets JOIN sets ON user_sets.set_num = sets.set_num WHERE user_sets.user_id = ? AND user_sets.status = 'OWNED' GROUP BY sets.year ORDER BY sets.year ASC`, [userId], (e, rows) => r(rows)));
+
+    Promise.all([q1, q2, q3, q4]).then(([stats, wishlist, themes, years]) => {
+        res.render('dashboard', { 
+            stats: stats || {total_sets:0, total_items:0, total_parts:0, total_spent:0, total_value_rrp:0},
+            wishlist: wishlist || {wanted_count:0, wanted_value:0},
+            themes: themes || [],
+            years: years || [],
+            user: req.user
+        });
+    }).catch(e => res.send("Erro no Dashboard: " + e.message));
+});
+
+// --- ROTA HOMEPAGE ---
 app.get('/', (req, res) => {
     const userId = req.user ? req.user.id : null;
     let { limit, page, sort } = req.query;
@@ -133,8 +150,7 @@ app.get('/', (req, res) => {
 
     const filter = buildFilters(req.query, userId, false);
 
-    // Lógica de Ordenação
-    let orderBy = "themes.name ASC, sets.year DESC"; // Padrão
+    let orderBy = "themes.name ASC, sets.year DESC";
     if (sort === 'year_desc') orderBy = "sets.year DESC, sets.name ASC";
     if (sort === 'year_asc') orderBy = "sets.year ASC, sets.name ASC";
     if (sort === 'parts_desc') orderBy = "sets.num_parts DESC";
@@ -142,54 +158,36 @@ app.get('/', (req, res) => {
     if (sort === 'name_asc') orderBy = "sets.name ASC";
 
     let countSql = `SELECT COUNT(*) as total FROM sets LEFT JOIN themes ON sets.theme_id = themes.id LEFT JOIN user_sets ON sets.set_num = user_sets.set_num AND user_sets.user_id = ? ${filter.whereClause}`;
-    
     db.get(countSql, [userId, ...filter.params], (err, row) => {
-        const totalItems = row ? row.total : 0;
-        const totalPages = Math.ceil(totalItems / limitVal);
-
-        let dataSql = `
-            SELECT sets.*, themes.name as theme_name, 
-            user_sets.status as user_status, user_sets.quantity
-            FROM sets 
-            LEFT JOIN themes ON sets.theme_id = themes.id 
-            LEFT JOIN user_sets ON sets.set_num = user_sets.set_num AND user_sets.user_id = ? 
-            ${filter.whereClause} 
-            ORDER BY ${orderBy} 
-            LIMIT ? OFFSET ?`;
-
+        const totalItems = row ? row.total : 0; const totalPages = Math.ceil(totalItems / limitVal);
+        let dataSql = `SELECT sets.*, themes.name as theme_name, user_sets.status as user_status, user_sets.quantity FROM sets LEFT JOIN themes ON sets.theme_id = themes.id LEFT JOIN user_sets ON sets.set_num = user_sets.set_num AND user_sets.user_id = ? ${filter.whereClause} ORDER BY ${orderBy} LIMIT ? OFFSET ?`;
         db.all(dataSql, [userId, ...filter.params, limitVal, offset], (err, sets) => {
             let themesSql = `SELECT themes.name, MIN(sets.year) as min_year, MAX(sets.year) as max_year FROM themes JOIN sets ON themes.id = sets.theme_id WHERE (themes.is_hidden IS NULL OR themes.is_hidden = 0) GROUP BY themes.name ORDER BY themes.name ASC`;
             db.all(themesSql, [], (e1, allThemes) => {
                 db.all("SELECT DISTINCT year FROM sets ORDER BY year DESC", [], (e2, allYears) => {
-                    res.render('index', { 
-                        sets: sets || [], allThemes: allThemes || [], allYears: allYears || [], 
-                        query: req.query, pagination: { page: pageVal, limit: limitVal, totalPages, totalItems },
-                        user: req.user, currentYear: new Date().getFullYear()
-                    });
+                    res.render('index', { sets: sets || [], allThemes: allThemes || [], allYears: allYears || [], query: req.query, pagination: { page: pageVal, limit: limitVal, totalPages, totalItems }, user: req.user, currentYear: new Date().getFullYear() });
                 });
             });
         });
     });
 });
 
-// --- PÁGINA DE DETALHE ---
+// --- ROTA DETALHE SET ---
 app.get('/set/:set_num', (req, res) => {
     const userId = req.user ? req.user.id : null;
     const { set_num } = req.params;
-
     const sql = `
         SELECT sets.*, themes.name as theme_name, 
         user_sets.status as user_status, 
         user_sets.quantity,
         user_sets.date_added,
-        user_sets.build_status, -- NOVO
-        user_sets.location -- NOVO
+        user_sets.build_status, 
+        user_sets.location, 
+        user_sets.purchase_price 
         FROM sets 
         LEFT JOIN themes ON sets.theme_id = themes.id 
-        LEFT JOIN user_sets ON sets.set_num = user_sets.set_num AND user_sets.user_id = ?
-        WHERE sets.set_num = ?
-    `;
-
+        LEFT JOIN user_sets ON sets.set_num = user_sets.set_num AND user_sets.user_id = ? 
+        WHERE sets.set_num = ?`;
     db.get(sql, [userId, set_num], (err, set) => {
         if (err || !set) return res.status(404).render('index', { error: 'Set não encontrado', sets:[], allThemes:[], allYears:[], query:{}, pagination:{}, user: req.user });
         set.rb_url = `https://rebrickable.com/sets/${set.set_num}`;
@@ -197,66 +195,47 @@ app.get('/set/:set_num', (req, res) => {
     });
 });
 
-// --- API ---
+// --- APIs ---
 app.post('/api/toggle', (req, res) => {
     if (!req.user) return res.status(401).send();
-    const { set_num, status } = req.body; 
-
-    if (status === 'REMOVE') {
-        db.run("DELETE FROM user_sets WHERE user_id=? AND set_num=?", [req.user.id, set_num], () => res.json({ok: true, status: null}));
-    } else {
+    const { set_num, status } = req.body;
+    if (status === 'REMOVE') db.run("DELETE FROM user_sets WHERE user_id=? AND set_num=?", [req.user.id, set_num], () => res.json({ok: true, status: null}));
+    else {
         const sql = `INSERT INTO user_sets (user_id, set_num, status, quantity, build_status) VALUES (?, ?, ?, 1, 'Montado') ON CONFLICT(user_id, set_num) DO UPDATE SET status = excluded.status`;
         db.run(sql, [req.user.id, set_num, status], () => res.json({ok: true, status: status}));
     }
 });
 
-// NOVO: API PARA ATUALIZAR DETALHES (LOCALIZAÇÃO E ESTADO)
+// API UPDATE: Atualiza CUSTO (User) e PVP (Set Global)
 app.post('/api/user_set/update', (req, res) => {
     if (!req.user) return res.status(401).send();
-    const { set_num, build_status, location } = req.body;
+    const { set_num, build_status, location, purchase_price, price_eur } = req.body;
     
-    const sql = "UPDATE user_sets SET build_status = ?, location = ? WHERE user_id = ? AND set_num = ?";
-    db.run(sql, [build_status, location, req.user.id, set_num], (err) => {
+    // 1. Atualizar dados do Utilizador (Custo, Local, Estado)
+    const sqlUser = "UPDATE user_sets SET build_status = ?, location = ?, purchase_price = ? WHERE user_id = ? AND set_num = ?";
+    db.run(sqlUser, [build_status, location, purchase_price || 0, req.user.id, set_num], (err) => {
         if (err) return res.status(500).json({error: err.message});
-        res.json({success: true});
-    });
-});
 
-app.post('/api/preferences', (req, res) => {
-    if (!req.user) return res.status(401).send();
-    const { dark_mode, items_per_page } = req.body;
-    let sql="UPDATE users SET ", p=[], u=[];
-    if(dark_mode!==undefined) {u.push("dark_mode=?"); p.push(dark_mode?1:0);}
-    if(items_per_page!==undefined) {u.push("items_per_page=?"); p.push(items_per_page);}
-    if(u.length) { sql+=u.join(",")+" WHERE id=?"; p.push(req.user.id); db.run(sql,p,()=>res.json({ok:true})); } else res.json({ok:true});
-});
-
-// --- ADMIN ROTAS (IGUAIS AO ANTERIOR) ---
-app.get('/admin/sets', ensureAdmin, (req, res) => {
-    let { limit, page } = req.query;
-    let limitVal = limit || 50; let pageVal = parseInt(page) || 1; let offset = (pageVal - 1) * limitVal;
-    const filter = buildFilters(req.query, req.user.id, true);
-    let countSql = `SELECT COUNT(*) as total FROM sets LEFT JOIN themes ON sets.theme_id = themes.id ${filter.whereClause}`;
-    db.get(countSql, filter.params, (err, row) => {
-        const totalItems = row ? row.total : 0; const totalPages = Math.ceil(totalItems / limitVal);
-        let dataSql = `SELECT sets.*, themes.name as theme_name FROM sets LEFT JOIN themes ON sets.theme_id = themes.id ${filter.whereClause} ORDER BY sets.year DESC, sets.name ASC LIMIT ? OFFSET ?`;
-        db.all(dataSql, [...filter.params, limitVal, offset], (err, sets) => {
-            let themesSql = `SELECT themes.name, MIN(sets.year) as min_year, MAX(sets.year) as max_year FROM themes JOIN sets ON themes.id = sets.theme_id GROUP BY themes.name ORDER BY themes.name ASC`;
-            db.all(themesSql, [], (e1, allThemes) => {
-                db.all("SELECT DISTINCT year FROM sets ORDER BY year DESC", [], (e2, allYears) => {
-                    res.render('admin/sets', { sets: sets || [], allThemes: allThemes || [], allYears: allYears || [], query: req.query, pagination: { page: pageVal, limit: limitVal, totalPages, totalItems }, user: req.user });
-                });
+        // 2. Atualizar dados do Set (PVP Oficial / Valor de Mercado) se fornecido
+        if (price_eur !== undefined) {
+            db.run("UPDATE sets SET price_eur = ? WHERE set_num = ?", [price_eur || 0, set_num], () => {
+                res.json({success: true});
             });
-        });
+        } else {
+            res.json({success: true});
+        }
     });
 });
+
+app.post('/api/preferences', (req, res) => { if (!req.user) return res.status(401).send(); const { dark_mode, items_per_page } = req.body; let sql="UPDATE users SET ", p=[], u=[]; if(dark_mode!==undefined) {u.push("dark_mode=?"); p.push(dark_mode?1:0);} if(items_per_page!==undefined) {u.push("items_per_page=?"); p.push(items_per_page);} if(u.length) { sql+=u.join(",")+" WHERE id=?"; p.push(req.user.id); db.run(sql,p,()=>res.json({ok:true})); } else res.json({ok:true}); });
+
+// ADMIN (Igual)
+app.get('/admin/sets', ensureAdmin, (req, res) => { let { limit, page } = req.query; let limitVal = limit || 50; let pageVal = parseInt(page) || 1; let offset = (pageVal - 1) * limitVal; const filter = buildFilters(req.query, req.user.id, true); let countSql = `SELECT COUNT(*) as total FROM sets LEFT JOIN themes ON sets.theme_id = themes.id ${filter.whereClause}`; db.get(countSql, filter.params, (err, row) => { const totalItems = row ? row.total : 0; const totalPages = Math.ceil(totalItems / limitVal); let dataSql = `SELECT sets.*, themes.name as theme_name FROM sets LEFT JOIN themes ON sets.theme_id = themes.id ${filter.whereClause} ORDER BY sets.year DESC, sets.name ASC LIMIT ? OFFSET ?`; db.all(dataSql, [...filter.params, limitVal, offset], (err, sets) => { let themesSql = `SELECT themes.name, MIN(sets.year) as min_year, MAX(sets.year) as max_year FROM themes JOIN sets ON themes.id = sets.theme_id GROUP BY themes.name ORDER BY themes.name ASC`; db.all(themesSql, [], (e1, allThemes) => { db.all("SELECT DISTINCT year FROM sets ORDER BY year DESC", [], (e2, allYears) => { res.render('admin/sets', { sets: sets || [], allThemes: allThemes || [], allYears: allYears || [], query: req.query, pagination: { page: pageVal, limit: limitVal, totalPages, totalItems }, user: req.user }); }); }); }); }); });
 app.post('/admin/sets/toggle', ensureAdmin, (req, res) => { const { set_num, field, value } = req.body; if (!['is_hidden', 'ignore_parts'].includes(field)) return res.status(400).send(); db.run(`UPDATE sets SET ${field} = ? WHERE set_num = ?`, [value ? 1 : 0, set_num], (err) => res.json({success: !err})); });
 app.get('/admin/themes', ensureAdmin, (req, res) => { const sql = `SELECT t.id, t.name, t.is_hidden, t.ignore_parts, COUNT(s.set_num) as total_sets, SUM(CASE WHEN s.num_parts = 0 THEN 1 ELSE 0 END) as zero_part_sets, MIN(s.year) as min_year, MAX(s.year) as max_year FROM themes t LEFT JOIN sets s ON t.id = s.theme_id GROUP BY t.id ORDER BY t.name ASC`; db.all(sql, [], (err, themes) => res.render('admin/themes', { themes: themes || [], user: req.user })); });
 app.post('/admin/themes/toggle', ensureAdmin, (req, res) => { const { theme_id, field, value } = req.body; if (!['is_hidden', 'ignore_parts'].includes(field)) return res.status(400).send(); db.run(`UPDATE themes SET ${field} = ? WHERE id = ?`, [value ? 1 : 0, theme_id], (err) => res.json({success: !err})); });
 app.get('/admin/users', ensureAdmin, (req, res) => { let { sort } = req.query; let orderBy = "id ASC"; if (sort === 'name') orderBy = "name ASC"; else if (sort === 'login') orderBy = "google_id DESC"; else if (sort === 'access') orderBy = "last_login DESC"; db.all(`SELECT id, name, email, google_id, is_verified, last_login FROM users ORDER BY ${orderBy}`, [], (err, users) => res.render('admin/users', { users: users || [], sort, user: req.user })); });
 app.post('/admin/users/reset', ensureAdmin, async (req, res) => { const { user_id, type } = req.body; db.get("SELECT * FROM users WHERE id = ?", [user_id], (err, user) => { if (!user || user.google_id) return res.json({error: "Utilizador Google ou inválido."}); const token = crypto.randomBytes(32).toString('hex'); db.run("UPDATE users SET reset_token = ?, reset_expires = ? WHERE id = ?", [token, Date.now() + 3600000, user_id], async () => { const link = `http://${req.headers.host}/reset/${token}`; if (type === 'email') { await sendEmail(user.email, "Reset Admin", `Link: ${link}`); res.json({success: true, message: "Enviado."}); } else res.json({success: true, link}); }); }); });
-
-// --- AUTH & MISC ---
 app.get('/login', (req, res) => res.render('login'));
 app.post('/login', (req, res, next) => { passport.authenticate('local', (err, user, info) => { if (err) return next(err); if (!user) return res.redirect('/login?error=' + encodeURIComponent(info.message || 'Erro')); req.logIn(user, (err) => { if(err) return next(err); res.redirect('/'); }); })(req, res, next); });
 app.get('/logout', (req, res) => req.logout(() => res.redirect('/')));
