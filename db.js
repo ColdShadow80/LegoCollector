@@ -1,45 +1,24 @@
 const sqlite3 = require('sqlite3').verbose();
 const db = new sqlite3.Database('./lego.db');
 
-// --- SISTEMA DE MIGRAÇÕES ---
 const MIGRATIONS = [
-    // V1: Tabelas Base
-    `CREATE TABLE IF NOT EXISTS sets (
-        set_num TEXT PRIMARY KEY, name TEXT, year INTEGER, theme_id INTEGER, 
-        num_parts INTEGER, img_url TEXT, eol_status TEXT DEFAULT 'Active', 
-        eol_date TEXT, price_eur REAL, owned INTEGER DEFAULT 0
-    );
-    CREATE TABLE IF NOT EXISTS themes (
-        id INTEGER PRIMARY KEY, name TEXT, parent_id INTEGER
-    );`,
-
-    // V2: Multi-User
-    `CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        email TEXT UNIQUE, password TEXT, name TEXT, google_id TEXT UNIQUE
-    );
-    CREATE TABLE IF NOT EXISTS user_sets (
-        user_id INTEGER, set_num TEXT, date_added DATETIME DEFAULT CURRENT_TIMESTAMP,
-        PRIMARY KEY (user_id, set_num),
-        FOREIGN KEY(user_id) REFERENCES users(id),
-        FOREIGN KEY(set_num) REFERENCES sets(set_num)
-    );
+    // V1
+    `CREATE TABLE IF NOT EXISTS sets (set_num TEXT PRIMARY KEY, name TEXT, year INTEGER, theme_id INTEGER, num_parts INTEGER, img_url TEXT, eol_status TEXT DEFAULT 'Active', eol_date TEXT, price_eur REAL, owned INTEGER DEFAULT 0);
+    CREATE TABLE IF NOT EXISTS themes (id INTEGER PRIMARY KEY, name TEXT, parent_id INTEGER);`,
+    // V2
+    `CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT UNIQUE, password TEXT, name TEXT, google_id TEXT UNIQUE);
+    CREATE TABLE IF NOT EXISTS user_sets (user_id INTEGER, set_num TEXT, date_added DATETIME DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (user_id, set_num), FOREIGN KEY(user_id) REFERENCES users(id), FOREIGN KEY(set_num) REFERENCES sets(set_num));
     CREATE TABLE IF NOT EXISTS schema_version (version INTEGER);`,
-
-    // V3: Preferências
-    `ALTER TABLE users ADD COLUMN dark_mode INTEGER DEFAULT 0;
-     ALTER TABLE users ADD COLUMN items_per_page INTEGER DEFAULT 25;`,
-
-    // V4: Segurança e Email
-    `ALTER TABLE users ADD COLUMN is_verified INTEGER DEFAULT 0;
-     ALTER TABLE users ADD COLUMN verify_token TEXT;
-     ALTER TABLE users ADD COLUMN reset_token TEXT;
-     ALTER TABLE users ADD COLUMN reset_expires INTEGER;`,
-     
-     // V5: ADMINISTRAÇÃO E GESTÃO DE TEMAS (NOVO)
-     `ALTER TABLE themes ADD COLUMN is_hidden INTEGER DEFAULT 0;
-      ALTER TABLE themes ADD COLUMN ignore_parts INTEGER DEFAULT 0;
-      ALTER TABLE users ADD COLUMN last_login DATETIME;`
+    // V3
+    `ALTER TABLE users ADD COLUMN dark_mode INTEGER DEFAULT 0; ALTER TABLE users ADD COLUMN items_per_page INTEGER DEFAULT 25;`,
+    // V4
+    `ALTER TABLE users ADD COLUMN is_verified INTEGER DEFAULT 0; ALTER TABLE users ADD COLUMN verify_token TEXT; ALTER TABLE users ADD COLUMN reset_token TEXT; ALTER TABLE users ADD COLUMN reset_expires INTEGER;`,
+    // V5
+    `ALTER TABLE themes ADD COLUMN is_hidden INTEGER DEFAULT 0; ALTER TABLE themes ADD COLUMN ignore_parts INTEGER DEFAULT 0; ALTER TABLE users ADD COLUMN last_login DATETIME;`,
+    
+    // V6: CONTROLO INDIVIDUAL DE SETS (NOVO)
+    `ALTER TABLE sets ADD COLUMN is_hidden INTEGER DEFAULT 0;
+     ALTER TABLE sets ADD COLUMN ignore_parts INTEGER DEFAULT 0;`
 ];
 
 function runMigrations() {
@@ -55,9 +34,7 @@ function runMigrations() {
                         console.log(`   > Aplicando migração v${i + 1}...`);
                         const commands = MIGRATIONS[i].split(';').filter(cmd => cmd.trim() !== '');
                         commands.forEach(command => {
-                            db.run(command, (err) => { 
-                                if(err && !err.message.includes('duplicate column')) console.log("Nota:", err.message); 
-                            });
+                            db.run(command, (err) => { if(err && !err.message.includes('duplicate column')) console.log("Nota:", err.message); });
                         });
                     }
                     db.run("DELETE FROM schema_version");
@@ -68,6 +45,5 @@ function runMigrations() {
         });
     });
 }
-
 runMigrations();
 module.exports = db;
