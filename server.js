@@ -106,7 +106,6 @@ function buildFilters(query, userId, isAdminView = false) {
         whereClause += " AND (themes.is_hidden IS NULL OR themes.is_hidden = 0)";
         whereClause += " AND (sets.is_hidden IS NULL OR sets.is_hidden = 0)";
         
-        // Filtro por Estado (Coleção vs Wishlist)
         if (userId) {
             if (status === 'owned') {
                 whereClause += " AND user_sets.user_id = ? AND user_sets.status = 'OWNED'";
@@ -115,7 +114,6 @@ function buildFilters(query, userId, isAdminView = false) {
                 whereClause += " AND user_sets.user_id = ? AND user_sets.status = 'WANTED'";
                 params.push(userId);
             } else if (!themes && !year && !search) {
-                // Se não filtrar nada, mostra Coleção + Wishlist do utilizador
                 whereClause += " AND user_sets.user_id = ?";
                 params.push(userId);
             }
@@ -124,10 +122,10 @@ function buildFilters(query, userId, isAdminView = false) {
     return { whereClause, params };
 }
 
-// --- ROTA PRINCIPAL ---
+// --- ROTA PRINCIPAL (AGORA COM ORDENAÇÃO) ---
 app.get('/', (req, res) => {
     const userId = req.user ? req.user.id : null;
-    let { limit, page } = req.query;
+    let { limit, page, sort } = req.query;
     let limitVal = limit || (req.user ? req.user.items_per_page : 25);
     if (limitVal === 'all') limitVal = 10000;
     let pageVal = parseInt(page) || 1;
@@ -135,7 +133,14 @@ app.get('/', (req, res) => {
 
     const filter = buildFilters(req.query, userId, false);
 
-    // SQL Atualizado para ir buscar o STATUS (Owned/Wanted)
+    // Lógica de Ordenação
+    let orderBy = "themes.name ASC, sets.year DESC"; // Padrão
+    if (sort === 'year_desc') orderBy = "sets.year DESC, sets.name ASC";
+    if (sort === 'year_asc') orderBy = "sets.year ASC, sets.name ASC";
+    if (sort === 'parts_desc') orderBy = "sets.num_parts DESC";
+    if (sort === 'added_desc') orderBy = "user_sets.date_added DESC";
+    if (sort === 'name_asc') orderBy = "sets.name ASC";
+
     let countSql = `SELECT COUNT(*) as total FROM sets LEFT JOIN themes ON sets.theme_id = themes.id LEFT JOIN user_sets ON sets.set_num = user_sets.set_num AND user_sets.user_id = ? ${filter.whereClause}`;
     
     db.get(countSql, [userId, ...filter.params], (err, row) => {
@@ -144,13 +149,12 @@ app.get('/', (req, res) => {
 
         let dataSql = `
             SELECT sets.*, themes.name as theme_name, 
-            user_sets.status as user_status,
-            user_sets.quantity
+            user_sets.status as user_status, user_sets.quantity
             FROM sets 
             LEFT JOIN themes ON sets.theme_id = themes.id 
             LEFT JOIN user_sets ON sets.set_num = user_sets.set_num AND user_sets.user_id = ? 
             ${filter.whereClause} 
-            ORDER BY themes.name ASC, sets.year DESC 
+            ORDER BY ${orderBy} 
             LIMIT ? OFFSET ?`;
 
         db.all(dataSql, [userId, ...filter.params, limitVal, offset], (err, sets) => {
@@ -168,7 +172,7 @@ app.get('/', (req, res) => {
     });
 });
 
-// --- PÁGINA DE DETALHE DO SET (NOVA) ---
+// --- PÁGINA DE DETALHE ---
 app.get('/set/:set_num', (req, res) => {
     const userId = req.user ? req.user.id : null;
     const { set_num } = req.params;
@@ -177,7 +181,9 @@ app.get('/set/:set_num', (req, res) => {
         SELECT sets.*, themes.name as theme_name, 
         user_sets.status as user_status, 
         user_sets.quantity,
-        user_sets.date_added
+        user_sets.date_added,
+        user_sets.build_status, -- NOVO
+        user_sets.location -- NOVO
         FROM sets 
         LEFT JOIN themes ON sets.theme_id = themes.id 
         LEFT JOIN user_sets ON sets.set_num = user_sets.set_num AND user_sets.user_id = ?
@@ -186,42 +192,53 @@ app.get('/set/:set_num', (req, res) => {
 
     db.get(sql, [userId, set_num], (err, set) => {
         if (err || !set) return res.status(404).render('index', { error: 'Set não encontrado', sets:[], allThemes:[], allYears:[], query:{}, pagination:{}, user: req.user });
-        
-        // Link para Rebrickable
         set.rb_url = `https://rebrickable.com/sets/${set.set_num}`;
-        
         res.render('set_detail', { set, user: req.user });
     });
 });
 
-// --- API TOGGLE ATUALIZADA (OWNED / WANTED / REMOVE) ---
+// --- API ---
 app.post('/api/toggle', (req, res) => {
     if (!req.user) return res.status(401).send();
-    const { set_num, status } = req.body; // status: 'OWNED', 'WANTED', 'REMOVE'
+    const { set_num, status } = req.body; 
 
     if (status === 'REMOVE') {
         db.run("DELETE FROM user_sets WHERE user_id=? AND set_num=?", [req.user.id, set_num], () => res.json({ok: true, status: null}));
     } else {
-        // Upsert: Insere ou Atualiza se já existir (ex: mudar de Wanted para Owned)
-        const sql = `
-            INSERT INTO user_sets (user_id, set_num, status, quantity) VALUES (?, ?, ?, 1)
-            ON CONFLICT(user_id, set_num) DO UPDATE SET status = excluded.status
-        `;
+        const sql = `INSERT INTO user_sets (user_id, set_num, status, quantity, build_status) VALUES (?, ?, ?, 1, 'Montado') ON CONFLICT(user_id, set_num) DO UPDATE SET status = excluded.status`;
         db.run(sql, [req.user.id, set_num, status], () => res.json({ok: true, status: status}));
     }
 });
 
-// --- ADMIN ---
+// NOVO: API PARA ATUALIZAR DETALHES (LOCALIZAÇÃO E ESTADO)
+app.post('/api/user_set/update', (req, res) => {
+    if (!req.user) return res.status(401).send();
+    const { set_num, build_status, location } = req.body;
+    
+    const sql = "UPDATE user_sets SET build_status = ?, location = ? WHERE user_id = ? AND set_num = ?";
+    db.run(sql, [build_status, location, req.user.id, set_num], (err) => {
+        if (err) return res.status(500).json({error: err.message});
+        res.json({success: true});
+    });
+});
+
+app.post('/api/preferences', (req, res) => {
+    if (!req.user) return res.status(401).send();
+    const { dark_mode, items_per_page } = req.body;
+    let sql="UPDATE users SET ", p=[], u=[];
+    if(dark_mode!==undefined) {u.push("dark_mode=?"); p.push(dark_mode?1:0);}
+    if(items_per_page!==undefined) {u.push("items_per_page=?"); p.push(items_per_page);}
+    if(u.length) { sql+=u.join(",")+" WHERE id=?"; p.push(req.user.id); db.run(sql,p,()=>res.json({ok:true})); } else res.json({ok:true});
+});
+
+// --- ADMIN ROTAS (IGUAIS AO ANTERIOR) ---
 app.get('/admin/sets', ensureAdmin, (req, res) => {
     let { limit, page } = req.query;
-    let limitVal = limit || 50; 
-    let pageVal = parseInt(page) || 1;
-    let offset = (pageVal - 1) * limitVal;
+    let limitVal = limit || 50; let pageVal = parseInt(page) || 1; let offset = (pageVal - 1) * limitVal;
     const filter = buildFilters(req.query, req.user.id, true);
     let countSql = `SELECT COUNT(*) as total FROM sets LEFT JOIN themes ON sets.theme_id = themes.id ${filter.whereClause}`;
     db.get(countSql, filter.params, (err, row) => {
-        const totalItems = row ? row.total : 0;
-        const totalPages = Math.ceil(totalItems / limitVal);
+        const totalItems = row ? row.total : 0; const totalPages = Math.ceil(totalItems / limitVal);
         let dataSql = `SELECT sets.*, themes.name as theme_name FROM sets LEFT JOIN themes ON sets.theme_id = themes.id ${filter.whereClause} ORDER BY sets.year DESC, sets.name ASC LIMIT ? OFFSET ?`;
         db.all(dataSql, [...filter.params, limitVal, offset], (err, sets) => {
             let themesSql = `SELECT themes.name, MIN(sets.year) as min_year, MAX(sets.year) as max_year FROM themes JOIN sets ON themes.id = sets.theme_id GROUP BY themes.name ORDER BY themes.name ASC`;
@@ -233,84 +250,20 @@ app.get('/admin/sets', ensureAdmin, (req, res) => {
         });
     });
 });
-app.post('/admin/sets/toggle', ensureAdmin, (req, res) => {
-    const { set_num, field, value } = req.body;
-    if (!['is_hidden', 'ignore_parts'].includes(field)) return res.status(400).send();
-    db.run(`UPDATE sets SET ${field} = ? WHERE set_num = ?`, [value ? 1 : 0, set_num], (err) => res.json({success: !err}));
-});
-app.get('/admin/themes', ensureAdmin, (req, res) => {
-    const sql = `SELECT t.id, t.name, t.is_hidden, t.ignore_parts, COUNT(s.set_num) as total_sets, SUM(CASE WHEN s.num_parts = 0 THEN 1 ELSE 0 END) as zero_part_sets, MIN(s.year) as min_year, MAX(s.year) as max_year FROM themes t LEFT JOIN sets s ON t.id = s.theme_id GROUP BY t.id ORDER BY t.name ASC`;
-    db.all(sql, [], (err, themes) => res.render('admin/themes', { themes: themes || [], user: req.user }));
-});
-app.post('/admin/themes/toggle', ensureAdmin, (req, res) => {
-    const { theme_id, field, value } = req.body;
-    if (!['is_hidden', 'ignore_parts'].includes(field)) return res.status(400).send();
-    db.run(`UPDATE themes SET ${field} = ? WHERE id = ?`, [value ? 1 : 0, theme_id], (err) => res.json({success: !err}));
-});
-app.get('/admin/users', ensureAdmin, (req, res) => {
-    let { sort } = req.query;
-    let orderBy = "id ASC";
-    if (sort === 'name') orderBy = "name ASC"; else if (sort === 'login') orderBy = "google_id DESC"; else if (sort === 'access') orderBy = "last_login DESC";
-    db.all(`SELECT id, name, email, google_id, is_verified, last_login FROM users ORDER BY ${orderBy}`, [], (err, users) => res.render('admin/users', { users: users || [], sort, user: req.user }));
-});
-app.post('/admin/users/reset', ensureAdmin, async (req, res) => {
-    const { user_id, type } = req.body;
-    db.get("SELECT * FROM users WHERE id = ?", [user_id], (err, user) => {
-        if (!user || user.google_id) return res.json({error: "Utilizador Google ou inválido."});
-        const token = crypto.randomBytes(32).toString('hex');
-        db.run("UPDATE users SET reset_token = ?, reset_expires = ? WHERE id = ?", [token, Date.now() + 3600000, user_id], async () => {
-            const link = `http://${req.headers.host}/reset/${token}`;
-            if (type === 'email') { await sendEmail(user.email, "Reset Admin", `Link: ${link}`); res.json({success: true, message: "Enviado."}); }
-            else res.json({success: true, link});
-        });
-    });
-});
+app.post('/admin/sets/toggle', ensureAdmin, (req, res) => { const { set_num, field, value } = req.body; if (!['is_hidden', 'ignore_parts'].includes(field)) return res.status(400).send(); db.run(`UPDATE sets SET ${field} = ? WHERE set_num = ?`, [value ? 1 : 0, set_num], (err) => res.json({success: !err})); });
+app.get('/admin/themes', ensureAdmin, (req, res) => { const sql = `SELECT t.id, t.name, t.is_hidden, t.ignore_parts, COUNT(s.set_num) as total_sets, SUM(CASE WHEN s.num_parts = 0 THEN 1 ELSE 0 END) as zero_part_sets, MIN(s.year) as min_year, MAX(s.year) as max_year FROM themes t LEFT JOIN sets s ON t.id = s.theme_id GROUP BY t.id ORDER BY t.name ASC`; db.all(sql, [], (err, themes) => res.render('admin/themes', { themes: themes || [], user: req.user })); });
+app.post('/admin/themes/toggle', ensureAdmin, (req, res) => { const { theme_id, field, value } = req.body; if (!['is_hidden', 'ignore_parts'].includes(field)) return res.status(400).send(); db.run(`UPDATE themes SET ${field} = ? WHERE id = ?`, [value ? 1 : 0, theme_id], (err) => res.json({success: !err})); });
+app.get('/admin/users', ensureAdmin, (req, res) => { let { sort } = req.query; let orderBy = "id ASC"; if (sort === 'name') orderBy = "name ASC"; else if (sort === 'login') orderBy = "google_id DESC"; else if (sort === 'access') orderBy = "last_login DESC"; db.all(`SELECT id, name, email, google_id, is_verified, last_login FROM users ORDER BY ${orderBy}`, [], (err, users) => res.render('admin/users', { users: users || [], sort, user: req.user })); });
+app.post('/admin/users/reset', ensureAdmin, async (req, res) => { const { user_id, type } = req.body; db.get("SELECT * FROM users WHERE id = ?", [user_id], (err, user) => { if (!user || user.google_id) return res.json({error: "Utilizador Google ou inválido."}); const token = crypto.randomBytes(32).toString('hex'); db.run("UPDATE users SET reset_token = ?, reset_expires = ? WHERE id = ?", [token, Date.now() + 3600000, user_id], async () => { const link = `http://${req.headers.host}/reset/${token}`; if (type === 'email') { await sendEmail(user.email, "Reset Admin", `Link: ${link}`); res.json({success: true, message: "Enviado."}); } else res.json({success: true, link}); }); }); });
 
 // --- AUTH & MISC ---
 app.get('/login', (req, res) => res.render('login'));
-app.post('/login', (req, res, next) => {
-    passport.authenticate('local', (err, user, info) => {
-        if (err) return next(err);
-        if (!user) return res.redirect('/login?error=' + encodeURIComponent(info.message || 'Erro'));
-        req.logIn(user, (err) => { if(err) return next(err); res.redirect('/'); });
-    })(req, res, next);
-});
+app.post('/login', (req, res, next) => { passport.authenticate('local', (err, user, info) => { if (err) return next(err); if (!user) return res.redirect('/login?error=' + encodeURIComponent(info.message || 'Erro')); req.logIn(user, (err) => { if(err) return next(err); res.redirect('/'); }); })(req, res, next); });
 app.get('/logout', (req, res) => req.logout(() => res.redirect('/')));
-app.get('/auth/google', (req, res, next) => {
-    if (!process.env.GOOGLE_CLIENT_ID) return res.status(500).send("Google ID em falta.");
-    passport.authenticate('google', { scope: ['profile', 'email'] })(req, res, next);
-});
+app.get('/auth/google', (req, res, next) => { if (!process.env.GOOGLE_CLIENT_ID) return res.status(500).send("Google ID em falta."); passport.authenticate('google', { scope: ['profile', 'email'] })(req, res, next); });
 app.get('/auth/google/callback', passport.authenticate('google', { failureRedirect: '/login?error=Falha Google' }), (req, res) => res.redirect('/'));
-app.post('/register', async (req, res) => {
-    const { name, email, password } = req.body;
-    try {
-        const exists = await new Promise(r => db.get("SELECT id FROM users WHERE email=?", [email], (e,row)=>r(row)));
-        if(exists) return res.redirect('/login?error=Email já existe');
-        const hashed = await bcrypt.hash(password, 10);
-        const token = crypto.randomBytes(32).toString('hex');
-        db.run("INSERT INTO users (name,email,password,is_verified,verify_token,last_login) VALUES (?,?,?,0,?,NULL)", [name,email,hashed,token], function(err){
-            if(err) return res.redirect('/login?error=Erro registo');
-            sendEmail(email, "Ativar Conta", `Link: http://${req.headers.host}/verify/${token}`);
-            if(this.lastID===1) db.run("INSERT OR IGNORE INTO user_sets (user_id, set_num) SELECT 1, set_num FROM sets WHERE owned=1");
-            res.redirect('/login?success=Verifique Email');
-        });
-    } catch(e) { res.redirect('/login?error=Erro servidor'); }
-});
-app.get('/verify/:token', (req, res) => {
-    db.get("SELECT id FROM users WHERE verify_token=?", [req.params.token], (e,u) => {
-        if(!u) return res.redirect('/login?error=Token inválido');
-        db.run("UPDATE users SET is_verified=1, verify_token=NULL WHERE id=?", [u.id], ()=> res.redirect('/login?success=Ativado!'));
-    });
-});
-app.post('/api/preferences', (req, res) => {
-    if (!req.user) return res.status(401).send();
-    const { dark_mode, items_per_page } = req.body;
-    let sql="UPDATE users SET ", p=[], u=[];
-    if(dark_mode!==undefined) {u.push("dark_mode=?"); p.push(dark_mode?1:0);}
-    if(items_per_page!==undefined) {u.push("items_per_page=?"); p.push(items_per_page);}
-    if(u.length) { sql+=u.join(",")+" WHERE id=?"; p.push(req.user.id); db.run(sql,p,()=>res.json({ok:true})); } else res.json({ok:true});
-});
+app.post('/register', async (req, res) => { const { name, email, password } = req.body; try { const exists = await new Promise(r => db.get("SELECT id FROM users WHERE email=?", [email], (e,row)=>r(row))); if(exists) return res.redirect('/login?error=Email já existe'); const hashed = await bcrypt.hash(password, 10); const token = crypto.randomBytes(32).toString('hex'); db.run("INSERT INTO users (name,email,password,is_verified,verify_token,last_login) VALUES (?,?,?,0,?,NULL)", [name,email,hashed,token], function(err){ if(err) return res.redirect('/login?error=Erro registo'); sendEmail(email, "Ativar Conta", `Link: http://${req.headers.host}/verify/${token}`); if(this.lastID===1) db.run("INSERT OR IGNORE INTO user_sets (user_id, set_num) SELECT 1, set_num FROM sets WHERE owned=1"); res.redirect('/login?success=Verifique Email'); }); } catch(e) { res.redirect('/login?error=Erro servidor'); } });
+app.get('/verify/:token', (req, res) => { db.get("SELECT id FROM users WHERE verify_token=?", [req.params.token], (e,u) => { if(!u) return res.redirect('/login?error=Token inválido'); db.run("UPDATE users SET is_verified=1, verify_token=NULL WHERE id=?", [u.id], ()=> res.redirect('/login?success=Ativado!')); }); });
 cron.schedule('0 4 * * *', () => exec('node sync.js', (e, out) => console.log(out || e)));
-
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🚀 Servidor na porta ${PORT}`));
