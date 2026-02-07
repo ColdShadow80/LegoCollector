@@ -40,8 +40,8 @@
                                 <span><%= set.num_parts %></span>
                             </div>
                             <div class="col-6 col-sm-4 mb-2">
-                                <small class="d-block fw-bold text-uppercase">Data EOL</small>
-                                <span><%= set.eol_date || 'Ativo' %></span>
+                                <small class="d-block fw-bold text-uppercase">PVP Oficial</small>
+                                <span><%= set.price_eur ? '€ ' + set.price_eur : 'N/A' %></span>
                             </div>
                         </div>
 
@@ -63,8 +63,22 @@
                                             <div class="col-md-6">
                                                 <label class="form-label small fw-bold">Localização</label>
                                                 <input type="text" class="form-control form-control-sm" id="location" 
-                                                       value="<%= set.location || '' %>" placeholder="Ex: Estante Sala">
+                                                       value="<%= set.location || '' %>" placeholder="Ex: Estante">
                                             </div>
+                                            
+                                            <div class="col-md-6">
+                                                <label class="form-label small fw-bold text-danger">Seu Custo (€)</label>
+                                                <input type="number" step="0.01" class="form-control form-control-sm" id="purchasePrice" 
+                                                       value="<%= set.purchase_price || '' %>" placeholder="0.00">
+                                            </div>
+
+                                            <div class="col-md-6">
+                                                <label class="form-label small fw-bold text-success">PVP / Mercado (€)</label>
+                                                <input type="number" step="0.01" class="form-control form-control-sm" id="rrpPrice" 
+                                                       value="<%= set.price_eur || '' %>" placeholder="0.00">
+                                                <div class="form-text" style="font-size:0.7em">Atualiza o valor de mercado deste set.</div>
+                                            </div>
+
                                             <div class="col-12 text-end">
                                                 <button type="button" class="btn btn-primary btn-sm" onclick="saveDetails()">Guardar Detalhes</button>
                                             </div>
@@ -80,31 +94,16 @@
                         <div class="d-flex flex-wrap gap-2">
                             <% if (user) { %>
                                 <% if (set.user_status === 'OWNED') { %>
-                                    <button class="btn btn-outline-danger flex-grow-1" onclick="toggleStatus('REMOVE')">
-                                        <i class="bi bi-trash"></i> Remover da Coleção
-                                    </button>
+                                    <button class="btn btn-outline-danger flex-grow-1" onclick="toggleStatus('REMOVE')"><i class="bi bi-trash"></i> Remover</button>
                                 <% } else if (set.user_status === 'WANTED') { %>
-                                    <button class="btn btn-success flex-grow-1" onclick="toggleStatus('OWNED')">
-                                        <i class="bi bi-check-lg"></i> Já Comprei!
-                                    </button>
-                                    <button class="btn btn-outline-danger" onclick="toggleStatus('REMOVE')">
-                                        <i class="bi bi-x-lg"></i> Remover
-                                    </button>
+                                    <button class="btn btn-success flex-grow-1" onclick="toggleStatus('OWNED')"><i class="bi bi-check-lg"></i> Já Comprei!</button>
+                                    <button class="btn btn-outline-danger" onclick="toggleStatus('REMOVE')"><i class="bi bi-x-lg"></i> Remover</button>
                                 <% } else { %>
-                                    <button class="btn btn-success flex-grow-1" onclick="toggleStatus('OWNED')">
-                                        <i class="bi bi-plus-lg"></i> Adicionar à Coleção
-                                    </button>
-                                    <button class="btn btn-outline-danger flex-grow-1" onclick="toggleStatus('WANTED')">
-                                        <i class="bi bi-heart"></i> Quero Comprar
-                                    </button>
+                                    <button class="btn btn-success flex-grow-1" onclick="toggleStatus('OWNED')"><i class="bi bi-plus-lg"></i> Adicionar</button>
+                                    <button class="btn btn-outline-danger flex-grow-1" onclick="toggleStatus('WANTED')"><i class="bi bi-heart"></i> Desejo</button>
                                 <% } %>
-                            <% } else { %>
-                                <a href="/login" class="btn btn-primary flex-grow-1">Login para gerir</a>
                             <% } %>
-                            
-                            <a href="<%= set.rb_url %>" target="_blank" class="btn btn-secondary" title="Ver no Rebrickable">
-                                <i class="bi bi-box-arrow-up-right"></i> RB
-                            </a>
+                            <a href="<%= set.rb_url %>" target="_blank" class="btn btn-secondary"><i class="bi bi-box-arrow-up-right"></i> RB</a>
                         </div>
                     </div>
                 </div>
@@ -116,11 +115,7 @@
 <script>
     async function toggleStatus(status) {
         try {
-            const res = await fetch('/api/toggle', { 
-                method: 'POST', 
-                headers: {'Content-Type':'application/json'}, 
-                body: JSON.stringify({set_num: '<%= set.set_num %>', status: status})
-            });
+            const res = await fetch('/api/toggle', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({set_num: '<%= set.set_num %>', status: status})});
             if (res.ok) window.location.reload();
         } catch(e) { alert('Erro'); }
     }
@@ -133,24 +128,30 @@
 
         const buildStatus = document.getElementById('buildStatus').value;
         const location = document.getElementById('location').value;
+        const price = document.getElementById('purchasePrice').value;
+        const rrp = document.getElementById('rrpPrice').value; // Novo Campo PVP
 
         try {
             const res = await fetch('/api/user_set/update', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ set_num: '<%= set.set_num %>', build_status: buildStatus, location: location })
+                body: JSON.stringify({ 
+                    set_num: '<%= set.set_num %>', 
+                    build_status: buildStatus, 
+                    location: location,
+                    purchase_price: price,
+                    price_eur: rrp // Envia PVP
+                })
             });
             if (res.ok) {
                 btn.innerText = 'Guardado!';
-                setTimeout(() => { btn.innerText = originalText; btn.disabled = false; }, 2000);
-            } else {
-                alert('Erro ao guardar.');
-                btn.disabled = false;
-            }
-        } catch(e) { 
-            alert('Erro de rede.');
-            btn.disabled = false; 
-        }
+                setTimeout(() => { 
+                    btn.innerText = originalText; 
+                    btn.disabled = false; 
+                    window.location.reload(); // Recarrega para atualizar valores no ecrã
+                }, 1000);
+            } else { alert('Erro ao guardar.'); btn.disabled = false; }
+        } catch(e) { alert('Erro de rede.'); btn.disabled = false; }
     }
 </script>
 </body>
