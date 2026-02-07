@@ -44,6 +44,35 @@
                                 <span><%= set.eol_date || 'Ativo' %></span>
                             </div>
                         </div>
+
+                        <% if (user && set.user_status === 'OWNED') { %>
+                            <div class="card bg-body-tertiary border-0 mb-4">
+                                <div class="card-body">
+                                    <h6 class="fw-bold mb-3"><i class="bi bi-pencil-square"></i> Detalhes da Coleção</h6>
+                                    <form id="detailsForm">
+                                        <div class="row g-3">
+                                            <div class="col-md-6">
+                                                <label class="form-label small fw-bold">Estado</label>
+                                                <select class="form-select form-select-sm" id="buildStatus">
+                                                    <option value="Montado" <%= set.build_status === 'Montado' ? 'selected' : '' %>>Montado</option>
+                                                    <option value="Selado" <%= set.build_status === 'Selado' ? 'selected' : '' %>>Selado (MISB)</option>
+                                                    <option value="Desmontado" <%= set.build_status === 'Desmontado' ? 'selected' : '' %>>Desmontado</option>
+                                                    <option value="Incompleto" <%= set.build_status === 'Incompleto' ? 'selected' : '' %>>Incompleto</option>
+                                                </select>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <label class="form-label small fw-bold">Localização</label>
+                                                <input type="text" class="form-control form-control-sm" id="location" 
+                                                       value="<%= set.location || '' %>" placeholder="Ex: Estante Sala">
+                                            </div>
+                                            <div class="col-12 text-end">
+                                                <button type="button" class="btn btn-primary btn-sm" onclick="saveDetails()">Guardar Detalhes</button>
+                                            </div>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        <% } %>
                     </div>
 
                     <div class="mt-auto">
@@ -56,7 +85,7 @@
                                     </button>
                                 <% } else if (set.user_status === 'WANTED') { %>
                                     <button class="btn btn-success flex-grow-1" onclick="toggleStatus('OWNED')">
-                                        <i class="bi bi-check-lg"></i> Já Comprei! (Mover para Coleção)
+                                        <i class="bi bi-check-lg"></i> Já Comprei!
                                     </button>
                                     <button class="btn btn-outline-danger" onclick="toggleStatus('REMOVE')">
                                         <i class="bi bi-x-lg"></i> Remover
@@ -94,6 +123,34 @@
             });
             if (res.ok) window.location.reload();
         } catch(e) { alert('Erro'); }
+    }
+
+    async function saveDetails() {
+        const btn = document.querySelector('#detailsForm button');
+        const originalText = btn.innerText;
+        btn.innerText = 'A guardar...';
+        btn.disabled = true;
+
+        const buildStatus = document.getElementById('buildStatus').value;
+        const location = document.getElementById('location').value;
+
+        try {
+            const res = await fetch('/api/user_set/update', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ set_num: '<%= set.set_num %>', build_status: buildStatus, location: location })
+            });
+            if (res.ok) {
+                btn.innerText = 'Guardado!';
+                setTimeout(() => { btn.innerText = originalText; btn.disabled = false; }, 2000);
+            } else {
+                alert('Erro ao guardar.');
+                btn.disabled = false;
+            }
+        } catch(e) { 
+            alert('Erro de rede.');
+            btn.disabled = false; 
+        }
     }
 </script>
 </body>
