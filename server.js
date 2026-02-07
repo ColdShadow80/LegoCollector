@@ -32,10 +32,16 @@ async function sendEmail(to, subject, text) {
 
 function ensureAdmin(req, res, next) { if (req.user && req.user.id === 1) return next(); res.status(403).send("Acesso Negado."); }
 
-// Passport
+// --- CONFIGURAÇÃO PASSPORT (CORRIGIDA) ---
 passport.serializeUser((user, done) => done(null, user.id));
+
+// AQUI ESTAVA O ERRO: Agora tratamos o caso de utilizador não encontrado
 passport.deserializeUser((id, done) => {
-    db.get("SELECT id, name, email, dark_mode, items_per_page, google_id FROM users WHERE id = ?", [id], (err, row) => done(err, row));
+    db.get("SELECT id, name, email, dark_mode, items_per_page, google_id FROM users WHERE id = ?", [id], (err, row) => {
+        if (err) return done(err);
+        if (!row) return done(null, false); // Se não encontrar, faz logout em vez de erro
+        done(null, row);
+    });
 });
 
 function updateLastLogin(user) { db.run("UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?", [user.id]); }
@@ -137,8 +143,7 @@ app.get('/api/scan', async (req, res) => {
     debugLog.push(`Recebido: ${cleanCode}`);
 
     try {
-        // PASSO 0: VERIFICAR MEMÓRIA LOCAL (AQUI ESTÁ A APRENDIZAGEM)
-        // Se já associámos este código antes, usa-o!
+        // PASSO 0: VERIFICAR MEMÓRIA LOCAL
         const localMatch = await dbGet("SELECT set_num FROM barcodes WHERE code = ?", [cleanCode]);
         
         if (localMatch) {
@@ -237,8 +242,8 @@ app.post('/api/toggle', (req, res) => { if (!req.user) return res.status(401).se
 app.post('/api/user_set/update', (req, res) => { if (!req.user) return res.status(401).send(); const { set_num, build_status, location, purchase_price, price_eur } = req.body; db.run("UPDATE user_sets SET build_status = ?, location = ?, purchase_price = ? WHERE user_id = ? AND set_num = ?", [build_status, location, purchase_price || 0, req.user.id, set_num], (err) => { if (err) return res.status(500).json({error: err.message}); if (price_eur !== undefined) db.run("UPDATE sets SET price_eur = ? WHERE set_num = ?", [price_eur || 0, set_num], () => res.json({success: true})); else res.json({success: true}); }); });
 app.post('/api/preferences', (req, res) => { if (!req.user) return res.status(401).send(); const { dark_mode, items_per_page } = req.body; let sql="UPDATE users SET ", p=[], u=[]; if(dark_mode!==undefined) {u.push("dark_mode=?"); p.push(dark_mode?1:0);} if(items_per_page!==undefined) {u.push("items_per_page=?"); p.push(items_per_page);} if(u.length) { sql+=u.join(",")+" WHERE id=?"; p.push(req.user.id); db.run(sql,p,()=>res.json({ok:true})); } else res.json({ok:true}); });
 
-// ADMIN, LOGIN, AUTH, CRON (IGUAIS)
-app.get('/admin/sets', ensureAdmin, (req, res) => { let { limit, page } = req.query; let limitVal = limit || 50; let pageVal = parseInt(page) || 1; let offset = (pageVal - 1) * limitVal; const filter = buildFilters(req.query, req.user.id, true); let countSql = `SELECT COUNT(*) as total FROM sets LEFT JOIN themes ON sets.theme_id = themes.id ${filter.whereClause}`; db.get(countSql, filter.params, (err, row) => { const totalItems = row ? row.total : 0; const totalPages = Math.ceil(totalItems / limitVal); let dataSql = `SELECT sets.*, themes.name as theme_name FROM sets LEFT JOIN themes ON sets.theme_id = themes.id ${filter.whereClause} ORDER BY sets.year DESC, sets.name ASC LIMIT ? OFFSET ?`; db.all(dataSql, [...filter.params, limitVal, offset], (err, sets) => { let themesSql = `SELECT themes.name, MIN(sets.year) as min_year, MAX(sets.year) as max_year FROM themes JOIN sets ON themes.id = sets.theme_id GROUP BY themes.name ORDER BY themes.name ASC`; db.all(themesSql, [], (e1, allThemes) => { db.all("SELECT DISTINCT year FROM sets ORDER BY year DESC", [], (e2, allYears) => { res.render('admin/sets', { sets: sets || [], allThemes: allThemes || [], allYears: allYears || [], query: req.query, pagination: { page: pageVal, limit: limitVal, totalPages, totalItems }, user: req.user, currentYear: new Date().getFullYear() }); }); }); }); }); });
+// ADMIN (IGUAIS)
+app.get('/admin/sets', ensureAdmin, (req, res) => { let { limit, page } = req.query; let limitVal = limit || 50; let pageVal = parseInt(page) || 1; let offset = (pageVal - 1) * limitVal; const filter = buildFilters(req.query, req.user.id, true); let countSql = `SELECT COUNT(*) as total FROM sets LEFT JOIN themes ON sets.theme_id = themes.id ${filter.whereClause}`; db.get(countSql, filter.params, (err, row) => { const totalItems = row ? row.total : 0; const totalPages = Math.ceil(totalItems / limitVal); let dataSql = `SELECT sets.*, themes.name as theme_name FROM sets LEFT JOIN themes ON sets.theme_id = themes.id ${filter.whereClause} ORDER BY sets.year DESC, sets.name ASC LIMIT ? OFFSET ?`; db.all(dataSql, [...filter.params, limitVal, offset], (err, sets) => { let themesSql = `SELECT themes.name, MIN(sets.year) as min_year, MAX(sets.year) as max_year FROM themes JOIN sets ON themes.id = sets.theme_id GROUP BY themes.name ORDER BY themes.name ASC`; db.all(themesSql, [], (e1, allThemes) => { db.all("SELECT DISTINCT year FROM sets ORDER BY year DESC", [], (e2, allYears) => { res.render('admin/sets', { sets: sets || [], allThemes: allThemes || [], allYears: allYears || [], query: req.query, pagination: { page: pageVal, limit: limitVal, totalPages, totalItems }, user: req.user }); }); }); }); }); });
 app.post('/admin/sets/toggle', ensureAdmin, (req, res) => { const { set_num, field, value } = req.body; if (!['is_hidden', 'ignore_parts'].includes(field)) return res.status(400).send(); db.run(`UPDATE sets SET ${field} = ? WHERE set_num = ?`, [value ? 1 : 0, set_num], (err) => res.json({success: !err})); });
 app.get('/admin/themes', ensureAdmin, (req, res) => { const sql = `SELECT t.id, t.name, t.is_hidden, t.ignore_parts, COUNT(s.set_num) as total_sets, SUM(CASE WHEN s.num_parts = 0 THEN 1 ELSE 0 END) as zero_part_sets, MIN(s.year) as min_year, MAX(s.year) as max_year FROM themes t LEFT JOIN sets s ON t.id = s.theme_id GROUP BY t.id ORDER BY t.name ASC`; db.all(sql, [], (err, themes) => res.render('admin/themes', { themes: themes || [], user: req.user })); });
 app.post('/admin/themes/toggle', ensureAdmin, (req, res) => { const { theme_id, field, value } = req.body; if (!['is_hidden', 'ignore_parts'].includes(field)) return res.status(400).send(); db.run(`UPDATE themes SET ${field} = ? WHERE id = ?`, [value ? 1 : 0, theme_id], (err) => res.json({success: !err})); });
