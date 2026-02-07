@@ -13,7 +13,6 @@ const crypto = require('crypto');
 const db = require('./db');
 const app = express();
 
-// --- EMAIL ---
 const transporter = nodemailer.createTransport({
     service: process.env.EMAIL_SERVICE || 'gmail',
     auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS }
@@ -21,19 +20,17 @@ const transporter = nodemailer.createTransport({
 
 async function sendEmail(to, subject, text) {
     if (!process.env.EMAIL_USER) {
-        console.log(`\n📨 [EMAIL SIMULADO] Para: ${to}\nAssunto: ${subject}\nConteúdo: ${text}\n`);
+        console.log(`\n📨 [EMAIL SIMULADO] Para: ${to}\n${text}\n`);
         return;
     }
     await transporter.sendMail({ from: process.env.EMAIL_USER, to, subject, text });
 }
 
-// --- MIDDLEWARE ADMIN ---
 function ensureAdmin(req, res, next) {
     if (req.user && req.user.id === 1) return next();
-    res.status(403).send("<h1>403 Acesso Negado</h1><p>Apenas o Administrador (ID 1) pode ver esta página.</p>");
+    res.status(403).send("<h1>Acesso Negado</h1>");
 }
 
-// --- PASSPORT ---
 passport.serializeUser((user, done) => done(null, user.id));
 passport.deserializeUser((id, done) => {
     db.get("SELECT id, name, email, dark_mode, items_per_page, google_id FROM users WHERE id = ?", [id], (err, row) => done(err, row));
@@ -53,7 +50,7 @@ passport.use(new LocalStrategy({ usernameField: 'email' }, (email, password, don
             return done(null, user);
         }
         return done(null, false, { message: 'Credenciais inválidas.' });
-    }); // <--- CORREÇÃO AQUI: Estava })); agora está });
+    });
 }));
 
 if (process.env.GOOGLE_CLIENT_ID) {
@@ -79,7 +76,6 @@ if (process.env.GOOGLE_CLIENT_ID) {
     }));
 }
 
-// --- MIDDLEWARES GERAIS ---
 app.set('view engine', 'ejs');
 app.use(express.static('public'));
 app.use(express.json());
@@ -100,54 +96,63 @@ app.use((req, res, next) => {
     next();
 });
 
-// --- ROTA PRINCIPAL (COM FILTRO DE OCULTOS) ---
+// --- LÓGICA DE FILTROS CENTRALIZADA ---
+function buildFilters(query, userId, isAdminView = false) {
+    let { themes, year, search } = query;
+    let whereClause = "WHERE 1=1";
+    let params = [];
+
+    if (themes) {
+        const list = Array.isArray(themes) ? themes : [themes];
+        whereClause += ` AND themes.name IN (${list.map(() => '?').join(',')})`;
+        params.push(...list);
+    }
+    if (year) { whereClause += " AND sets.year = ?"; params.push(year); }
+    if (search) { whereClause += " AND (sets.name LIKE ? OR sets.set_num LIKE ?)"; params.push(`%${search}%`, `%${search}%`); }
+
+    // Lógica Específica
+    if (!isAdminView) {
+        // Visitantes/Users: NÃO veem ocultos
+        whereClause += " AND (themes.is_hidden IS NULL OR themes.is_hidden = 0)";
+        whereClause += " AND (sets.is_hidden IS NULL OR sets.is_hidden = 0)";
+        
+        // Filtro "Minha Coleção" por defeito se não houver pesquisa
+        if (userId && !themes && !year && !search) {
+            whereClause += " AND user_sets.user_id = ?";
+            params.push(userId);
+        }
+    }
+    // Admin: Vê tudo (ocultos incluídos)
+
+    return { whereClause, params };
+}
+
+// --- ROTA PRINCIPAL ---
 app.get('/', (req, res) => {
     const userId = req.user ? req.user.id : null;
-    let { themes, year, search, page, limit } = req.query;
-
+    let { limit, page } = req.query;
     let limitVal = limit || (req.user ? req.user.items_per_page : 25);
     if (limitVal === 'all') limitVal = 10000;
     let pageVal = parseInt(page) || 1;
     let offset = (pageVal - 1) * limitVal;
 
-    let whereClause = "WHERE (themes.is_hidden IS NULL OR themes.is_hidden = 0)";
-    let sqlParams = [];
+    const filter = buildFilters(req.query, userId, false); // isAdminView = false
 
-    if (themes) {
-        const themeList = Array.isArray(themes) ? themes : [themes];
-        whereClause += ` AND themes.name IN (${themeList.map(() => '?').join(',')})`;
-        sqlParams.push(...themeList);
-    }
-    if (year) { whereClause += " AND sets.year = ?"; sqlParams.push(year); }
-    if (search) { whereClause += " AND (sets.name LIKE ? OR sets.set_num LIKE ?)"; sqlParams.push(`%${search}%`, `%${search}%`); }
-
-    if (req.user && !themes && !year && !search) {
-        whereClause += " AND user_sets.user_id = ?";
-        sqlParams.push(userId);
-    }
-
-    let countSql = `SELECT COUNT(*) as total FROM sets LEFT JOIN themes ON sets.theme_id = themes.id LEFT JOIN user_sets ON sets.set_num = user_sets.set_num AND user_sets.user_id = ? ${whereClause}`;
+    let countSql = `SELECT COUNT(*) as total FROM sets LEFT JOIN themes ON sets.theme_id = themes.id LEFT JOIN user_sets ON sets.set_num = user_sets.set_num AND user_sets.user_id = ? ${filter.whereClause}`;
     
-    db.get(countSql, [userId, ...sqlParams], (err, row) => {
+    db.get(countSql, [userId, ...filter.params], (err, row) => {
         const totalItems = row ? row.total : 0;
         const totalPages = Math.ceil(totalItems / limitVal);
 
-        let dataSql = `SELECT sets.*, themes.name as theme_name, CASE WHEN user_sets.user_id IS NOT NULL THEN 1 ELSE 0 END as is_owned FROM sets LEFT JOIN themes ON sets.theme_id = themes.id LEFT JOIN user_sets ON sets.set_num = user_sets.set_num AND user_sets.user_id = ? ${whereClause} ORDER BY themes.name ASC, sets.year DESC LIMIT ? OFFSET ?`;
+        let dataSql = `SELECT sets.*, themes.name as theme_name, CASE WHEN user_sets.user_id IS NOT NULL THEN 1 ELSE 0 END as is_owned FROM sets LEFT JOIN themes ON sets.theme_id = themes.id LEFT JOIN user_sets ON sets.set_num = user_sets.set_num AND user_sets.user_id = ? ${filter.whereClause} ORDER BY themes.name ASC, sets.year DESC LIMIT ? OFFSET ?`;
 
-        db.all(dataSql, [userId, ...sqlParams, limitVal, offset], (err, sets) => {
-            let themesSql = `
-                SELECT themes.name, MIN(sets.year) as min_year, MAX(sets.year) as max_year
-                FROM themes
-                JOIN sets ON themes.id = sets.theme_id
-                WHERE (themes.is_hidden IS NULL OR themes.is_hidden = 0)
-                GROUP BY themes.name ORDER BY themes.name ASC
-            `;
-
+        db.all(dataSql, [userId, ...filter.params, limitVal, offset], (err, sets) => {
+            let themesSql = `SELECT themes.name, MIN(sets.year) as min_year, MAX(sets.year) as max_year FROM themes JOIN sets ON themes.id = sets.theme_id WHERE (themes.is_hidden IS NULL OR themes.is_hidden = 0) GROUP BY themes.name ORDER BY themes.name ASC`;
             db.all(themesSql, [], (e1, allThemes) => {
                 db.all("SELECT DISTINCT year FROM sets ORDER BY year DESC", [], (e2, allYears) => {
                     res.render('index', { 
                         sets: sets || [], allThemes: allThemes || [], allYears: allYears || [], 
-                        query: req.query, pagination: { page: pageVal, limit: limit || (req.user?.items_per_page || 25), totalPages, totalItems },
+                        query: req.query, pagination: { page: pageVal, limit: limitVal, totalPages, totalItems },
                         user: req.user, currentYear: new Date().getFullYear()
                     });
                 });
@@ -156,78 +161,93 @@ app.get('/', (req, res) => {
     });
 });
 
-// --- ÁREA DE ADMINISTRAÇÃO ---
+// --- ADMINISTRAÇÃO ---
 
-// 1. Dashboard de Temas
-app.get('/admin/themes', ensureAdmin, (req, res) => {
-    const sql = `
-        SELECT t.id, t.name, t.is_hidden, t.ignore_parts,
-               COUNT(s.set_num) as total_sets,
-               SUM(CASE WHEN s.num_parts = 0 THEN 1 ELSE 0 END) as zero_part_sets,
-               MIN(s.year) as min_year, MAX(s.year) as max_year
-        FROM themes t
-        LEFT JOIN sets s ON t.id = s.theme_id
-        GROUP BY t.id
-        ORDER BY t.name ASC
-    `;
-    db.all(sql, [], (err, themes) => {
-        res.render('admin/themes', { themes: themes || [], user: req.user });
+// 1. Admin Sets (NOVO)
+app.get('/admin/sets', ensureAdmin, (req, res) => {
+    let { limit, page } = req.query;
+    let limitVal = limit || 50; 
+    let pageVal = parseInt(page) || 1;
+    let offset = (pageVal - 1) * limitVal;
+
+    const filter = buildFilters(req.query, req.user.id, true); // isAdminView = true
+
+    let countSql = `SELECT COUNT(*) as total FROM sets LEFT JOIN themes ON sets.theme_id = themes.id ${filter.whereClause}`;
+    
+    db.get(countSql, filter.params, (err, row) => {
+        const totalItems = row ? row.total : 0;
+        const totalPages = Math.ceil(totalItems / limitVal);
+
+        let dataSql = `SELECT sets.*, themes.name as theme_name FROM sets LEFT JOIN themes ON sets.theme_id = themes.id ${filter.whereClause} ORDER BY sets.year DESC, sets.name ASC LIMIT ? OFFSET ?`;
+
+        db.all(dataSql, [...filter.params, limitVal, offset], (err, sets) => {
+            let themesSql = `SELECT themes.name, MIN(sets.year) as min_year, MAX(sets.year) as max_year FROM themes JOIN sets ON themes.id = sets.theme_id GROUP BY themes.name ORDER BY themes.name ASC`;
+            db.all(themesSql, [], (e1, allThemes) => {
+                db.all("SELECT DISTINCT year FROM sets ORDER BY year DESC", [], (e2, allYears) => {
+                    res.render('admin/sets', { 
+                        sets: sets || [], allThemes: allThemes || [], allYears: allYears || [], 
+                        query: req.query, pagination: { page: pageVal, limit: limitVal, totalPages, totalItems },
+                        user: req.user
+                    });
+                });
+            });
+        });
     });
 });
 
-app.post('/admin/themes/toggle', ensureAdmin, (req, res) => {
-    const { theme_id, field, value } = req.body;
+// 2. Toggle Sets (NOVO)
+app.post('/admin/sets/toggle', ensureAdmin, (req, res) => {
+    const { set_num, field, value } = req.body;
     if (!['is_hidden', 'ignore_parts'].includes(field)) return res.status(400).send();
-    db.run(`UPDATE themes SET ${field} = ? WHERE id = ?`, [value ? 1 : 0, theme_id], (err) => {
+    db.run(`UPDATE sets SET ${field} = ? WHERE set_num = ?`, [value ? 1 : 0, set_num], (err) => {
         if (err) return res.status(500).json({error: err.message});
         res.json({success: true});
     });
 });
 
-// 2. Dashboard de Utilizadores
+// 3. Admin Themes
+app.get('/admin/themes', ensureAdmin, (req, res) => {
+    const sql = `SELECT t.id, t.name, t.is_hidden, t.ignore_parts, COUNT(s.set_num) as total_sets, SUM(CASE WHEN s.num_parts = 0 THEN 1 ELSE 0 END) as zero_part_sets, MIN(s.year) as min_year, MAX(s.year) as max_year FROM themes t LEFT JOIN sets s ON t.id = s.theme_id GROUP BY t.id ORDER BY t.name ASC`;
+    db.all(sql, [], (err, themes) => res.render('admin/themes', { themes: themes || [], user: req.user }));
+});
+
+app.post('/admin/themes/toggle', ensureAdmin, (req, res) => {
+    const { theme_id, field, value } = req.body;
+    if (!['is_hidden', 'ignore_parts'].includes(field)) return res.status(400).send();
+    db.run(`UPDATE themes SET ${field} = ? WHERE id = ?`, [value ? 1 : 0, theme_id], (err) => res.json({success: !err}));
+});
+
+// 4. Admin Users
 app.get('/admin/users', ensureAdmin, (req, res) => {
     let { sort } = req.query;
     let orderBy = "id ASC";
-    if (sort === 'name') orderBy = "name ASC";
-    if (sort === 'login') orderBy = "google_id DESC";
-    if (sort === 'access') orderBy = "last_login DESC";
-
-    const sql = `SELECT id, name, email, google_id, is_verified, last_login FROM users ORDER BY ${orderBy}`;
-    db.all(sql, [], (err, users) => {
-        res.render('admin/users', { users: users || [], sort, user: req.user });
-    });
+    if (sort === 'name') orderBy = "name ASC"; else if (sort === 'login') orderBy = "google_id DESC"; else if (sort === 'access') orderBy = "last_login DESC";
+    db.all(`SELECT id, name, email, google_id, is_verified, last_login FROM users ORDER BY ${orderBy}`, [], (err, users) => res.render('admin/users', { users: users || [], sort, user: req.user }));
 });
 
-// Reset Password - Admin
 app.post('/admin/users/reset', ensureAdmin, async (req, res) => {
     const { user_id, type } = req.body;
     db.get("SELECT * FROM users WHERE id = ?", [user_id], (err, user) => {
-        if (!user || user.google_id) return res.json({error: "Utilizador inválido ou usa Google Login."});
+        if (!user || user.google_id) return res.json({error: "Utilizador Google ou inválido."});
         const token = crypto.randomBytes(32).toString('hex');
-        const expires = Date.now() + 3600000;
-        
-        db.run("UPDATE users SET reset_token = ?, reset_expires = ? WHERE id = ?", [token, expires, user_id], async (e) => {
+        db.run("UPDATE users SET reset_token = ?, reset_expires = ? WHERE id = ?", [token, Date.now() + 3600000, user_id], async () => {
             const link = `http://${req.headers.host}/reset/${token}`;
-            if (type === 'email') {
-                await sendEmail(user.email, "Reset Password (Admin)", `O administrador gerou um reset.\nLink: ${link}`);
-                res.json({success: true, message: "Email enviado."});
-            } else {
-                res.json({success: true, link: link});
-            }
+            if (type === 'email') { await sendEmail(user.email, "Reset Admin", `Link: ${link}`); res.json({success: true, message: "Enviado."}); }
+            else res.json({success: true, link});
         });
     });
 });
 
-// --- ROTAS DE AUTH & CRON ---
+// --- AUTH & MISC ---
 app.get('/login', (req, res) => res.render('login'));
 app.post('/login', (req, res, next) => {
     passport.authenticate('local', (err, user, info) => {
         if (err) return next(err);
         if (!user) return res.redirect('/login?error=' + encodeURIComponent(info.message || 'Erro'));
-        req.logIn(user, (err) => { if (err) return next(err); res.redirect('/'); });
+        req.logIn(user, (err) => { if(err) return next(err); res.redirect('/'); });
     })(req, res, next);
 });
-app.get('/logout', (req, res) => { req.logout(() => res.redirect('/')); });
+app.get('/logout', (req, res) => req.logout(() => res.redirect('/')));
 app.get('/auth/google', (req, res, next) => {
     if (!process.env.GOOGLE_CLIENT_ID) return res.status(500).send("Google ID em falta.");
     passport.authenticate('google', { scope: ['profile', 'email'] })(req, res, next);
