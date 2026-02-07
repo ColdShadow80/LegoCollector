@@ -72,6 +72,10 @@
             <div class="modal-body p-0 position-relative bg-black">
                 <div id="reader" style="width:100%;"></div>
 
+                <div id="feedbackArea" class="text-white text-center p-2 small border-top border-secondary">
+                    <span id="debugScan">A aguardar leitura...</span>
+                </div>
+
                 <div id="scanResult" class="p-4 bg-body text-center" style="display:none;">
                     <div class="card shadow-sm mx-auto mb-3 border-0" style="max-width: 200px;">
                         <img id="resImg" src="" class="card-img-top rounded" style="height: 150px; object-fit: contain;">
@@ -173,6 +177,7 @@
                 
                 camSelect.onchange = () => stopScanner().then(() => initReader(camSelect.value));
             } else {
+                document.getElementById('debugScan').innerText = "Erro: Sem câmaras.";
                 alert('Sem câmara detetada. Use a pesquisa manual.');
             }
         } catch (e) { console.error(e); }
@@ -198,15 +203,17 @@
     }
 
     async function onScanSuccess(txt) {
+        // Pausa e mostra o que foi lido
         html5QrCode.pause();
+        document.getElementById('debugScan').innerHTML = `<span class="text-warning">Lido: ${txt}</span>. A pesquisar...`;
         await searchSet(txt);
     }
 
-    // NOVA FUNÇÃO: PESQUISA MANUAL
     async function manualSearch() {
         const num = document.getElementById('manualSetNum').value;
         if (!num) return;
         if(html5QrCode && html5QrCode.isScanning) html5QrCode.pause();
+        document.getElementById('debugScan').innerText = `A pesquisar manual: ${num}...`;
         await searchSet(num);
     }
 
@@ -214,13 +221,20 @@
         try {
             const res = await fetch(`/api/scan?code=${query}`);
             const data = await res.json();
+            
             if (data.found) {
                 showResult(data.set);
+                document.getElementById('debugScan').innerText = "Sucesso!";
             } else {
-                alert('Set não encontrado. Verifique o número.');
+                // Mostra o erro no debug
+                const scanned = data.scanned_code || query;
+                document.getElementById('debugScan').innerHTML = `<span class="text-danger">Não encontrado: ${scanned}</span>`;
+                alert(`Código '${scanned}' não encontrado. Verifique o número e tente manualmente.`);
+                
                 if(html5QrCode) html5QrCode.resume();
             }
         } catch (e) { 
+            document.getElementById('debugScan').innerText = "Erro de rede.";
             alert('Erro de comunicação.'); 
             if(html5QrCode) html5QrCode.resume();
         }
@@ -230,6 +244,7 @@
         currentSetNum = set.set_num;
         document.getElementById('reader').style.display = 'none'; 
         document.getElementById('scanResult').style.display = 'block';
+        document.getElementById('feedbackArea').style.display = 'none'; // Esconde debug no sucesso
         
         document.getElementById('resImg').src = set.img_url; 
         document.getElementById('resName').innerText = set.name; 
@@ -244,8 +259,10 @@
     function resetUI() {
         document.getElementById('scanResult').style.display = 'none';
         document.getElementById('reader').style.display = 'block';
+        document.getElementById('feedbackArea').style.display = 'block';
         document.getElementById('scannerControls').style.display = 'block';
         document.getElementById('manualSetNum').value = '';
+        document.getElementById('debugScan').innerText = "Aponte a câmara...";
         if(html5QrCode && !html5QrCode.isScanning) html5QrCode.resume();
     }
 
@@ -266,7 +283,7 @@
         } 
     }
     
-    // Funções Antigas (Filtros, DarkMode)
+    // Funções Antigas
     document.getElementById('themeSearchInput').addEventListener('keyup', (e) => { const term = e.target.value.toLowerCase(); document.querySelectorAll('.theme-item').forEach(item => { item.style.display = item.textContent.toLowerCase().includes(term) ? '' : 'none'; }); });
     function changeLimit(val) { document.getElementById('limitInput').value = val; savePref('items_per_page', val); submitPage(1); }
     function changeSort(val) { document.getElementById('sortInput').value = val; submitPage(1); }
