@@ -64,39 +64,45 @@
 <div class="modal fade" id="scanModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title"><i class="bi bi-qr-code-scan"></i> Scanner</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" onclick="stopScanner()"></button>
+            <div class="modal-header bg-dark text-white border-secondary">
+                <h5 class="modal-title fs-6"><i class="bi bi-qr-code-scan"></i> Scanner</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close" onclick="stopScanner()"></button>
             </div>
-            <div class="modal-body p-0 position-relative bg-dark">
-                <div id="reader"></div>
-                <div class="p-2 bg-dark text-white border-top border-secondary" id="scannerControls">
-                    <div class="input-group input-group-sm mb-2">
-                        <label class="input-group-text bg-secondary text-white border-secondary"><i class="bi bi-camera-video"></i></label>
-                        <select class="form-select bg-dark text-white border-secondary" id="cameraSelection">
-                            <option value="">A carregar...</option>
-                        </select>
+            
+            <div class="modal-body p-0 position-relative bg-black">
+                <div id="reader" style="width:100%;"></div>
+
+                <div id="scanResult" class="p-4 bg-body text-center" style="display:none;">
+                    <div class="card shadow-sm mx-auto mb-3 border-0" style="max-width: 200px;">
+                        <img id="resImg" src="" class="card-img-top rounded" style="height: 150px; object-fit: contain;">
                     </div>
-                    <div id="zoomContainer" class="d-none px-1">
-                        <label class="form-label small d-flex justify-content-between mb-0"><span><i class="bi bi-zoom-out"></i></span><span>Zoom</span><span><i class="bi bi-zoom-in"></i></span></label>
+                    <h5 id="resName" class="fw-bold mb-1 text-truncate"></h5>
+                    <span id="resNum" class="badge bg-secondary mb-3"></span>
+                    <div id="resStatus" class="mb-3"></div>
+
+                    <div class="d-flex gap-2 justify-content-center">
+                        <button class="btn btn-outline-danger flex-fill" onclick="performAction('WANTED')">Quero</button>
+                        <button class="btn btn-success flex-fill" onclick="performAction('OWNED')">Tenho</button>
+                    </div>
+                    <button class="btn btn-link btn-sm mt-3 text-decoration-none" onclick="resetScanner()">Ler outro</button>
+                </div>
+            </div>
+
+            <div class="modal-footer bg-dark border-secondary p-2 d-block">
+                <div id="scannerControls">
+                    <div class="input-group input-group-sm mb-2">
+                        <label class="input-group-text bg-secondary text-white border-0"><i class="bi bi-camera-video"></i></label>
+                        <select class="form-select bg-black text-white border-secondary" id="cameraSelection"></select>
+                    </div>
+                    <div id="zoomContainer" class="d-none px-1 mb-2">
                         <input type="range" class="form-range" id="zoomSlider" min="1" max="5" step="0.1" value="1">
                     </div>
                 </div>
-                <div id="scanResult" class="p-3 bg-body text-center" style="display:none;">
-                    <h5 class="text-success fw-bold mb-3"><i class="bi bi-check-circle-fill"></i> Encontrado!</h5>
-                    <div class="card shadow-sm mx-auto mb-3" style="max-width: 250px;">
-                        <img id="resImg" src="" class="card-img-top p-2" style="height: 150px; object-fit: contain;">
-                        <div class="card-body p-2">
-                            <h6 id="resName" class="card-title text-truncate small fw-bold"></h6>
-                            <span id="resNum" class="badge bg-secondary"></span>
-                            <span id="resStatus" class="d-block mt-1 small"></span>
-                        </div>
-                    </div>
-                    <div class="d-flex gap-2 justify-content-center">
-                        <button class="btn btn-outline-danger w-100" onclick="performAction('WANTED')"><i class="bi bi-heart"></i> Quero</button>
-                        <button class="btn btn-success w-100" onclick="performAction('OWNED')"><i class="bi bi-check-lg"></i> Tenho</button>
-                    </div>
-                    <button class="btn btn-link btn-sm mt-3" onclick="resetScanner()">Ler outro</button>
+
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text bg-secondary text-white border-0">#</span>
+                    <input type="number" id="manualSetNum" class="form-control bg-black text-white border-secondary" placeholder="Set errado? Digite o nº aqui...">
+                    <button class="btn btn-primary" onclick="manualSearch()">Pesquisar</button>
                 </div>
             </div>
         </div>
@@ -141,22 +147,35 @@
 <script>
     let html5QrCode; let currentSetNum = null;
     const scanModal = document.getElementById('scanModal');
+    
+    // Iniciar Scanner ao abrir modal
     scanModal.addEventListener('shown.bs.modal', startScanner);
     scanModal.addEventListener('hidden.bs.modal', stopScanner);
 
+    // Permitir Enter no input manual
+    document.getElementById('manualSetNum').addEventListener('keypress', function (e) {
+        if (e.key === 'Enter') manualSearch();
+    });
+
     async function startScanner() {
-        document.getElementById('reader').style.display = 'block'; document.getElementById('scannerControls').style.display = 'block'; document.getElementById('scanResult').style.display = 'none';
+        resetUI();
         try {
-            const cameras = await Html5Qrcode.getCameras(); const camSelect = document.getElementById('cameraSelection'); camSelect.innerHTML = '';
+            const cameras = await Html5Qrcode.getCameras(); 
+            const camSelect = document.getElementById('cameraSelection'); 
+            camSelect.innerHTML = '';
+            
             if (cameras && cameras.length) {
                 cameras.forEach(c => { const opt = document.createElement('option'); opt.value = c.id; opt.text = c.label; camSelect.appendChild(opt); });
-                let selected = cameras[0].id;
-                const backCam = cameras.find(c => c.label.toLowerCase().includes('back') || c.label.toLowerCase().includes('environment'));
-                if(backCam) { selected = backCam.id; camSelect.value = selected; }
-                initReader(selected);
+                // Tenta selecionar câmara traseira
+                let selected = cameras.find(c => c.label.toLowerCase().includes('back') || c.label.toLowerCase().includes('environment')) || cameras[0];
+                camSelect.value = selected.id;
+                initReader(selected.id);
+                
                 camSelect.onchange = () => stopScanner().then(() => initReader(camSelect.value));
-            } else alert('Sem câmaras.');
-        } catch (e) { alert('Erro câmara.'); }
+            } else {
+                alert('Sem câmara detetada. Use a pesquisa manual.');
+            }
+        } catch (e) { console.error(e); }
     }
 
     function initReader(id) {
@@ -168,38 +187,86 @@
     function checkZoomCapability() {
         try {
             const track = html5QrCode.getRunningTrackCameraCapabilities();
-            const slider = document.getElementById('zoomSlider');
             if (track && track.zoomFeature() && track.zoomFeature().isSupported()) {
-                const z = track.zoomFeature(); document.getElementById('zoomContainer').classList.remove('d-none');
+                const z = track.zoomFeature(); 
+                const slider = document.getElementById('zoomSlider');
+                document.getElementById('zoomContainer').classList.remove('d-none');
                 slider.min = z.min(); slider.max = z.max(); slider.step = z.step(); slider.value = z.value();
                 slider.oninput = function() { html5QrCode.applyVideoConstraints({ zoom: parseFloat(this.value) }); };
-            } else document.getElementById('zoomContainer').classList.add('d-none');
+            }
         } catch(e){}
     }
 
     async function onScanSuccess(txt) {
         html5QrCode.pause();
+        await searchSet(txt);
+    }
+
+    // NOVA FUNÇÃO: PESQUISA MANUAL
+    async function manualSearch() {
+        const num = document.getElementById('manualSetNum').value;
+        if (!num) return;
+        if(html5QrCode && html5QrCode.isScanning) html5QrCode.pause();
+        await searchSet(num);
+    }
+
+    async function searchSet(query) {
         try {
-            const res = await fetch(`/api/scan?code=${txt}`); const data = await res.json();
-            if (data.found) showResult(data.set); else { alert('Não encontrado.'); html5QrCode.resume(); }
-        } catch (e) { alert('Erro.'); html5QrCode.resume(); }
+            const res = await fetch(`/api/scan?code=${query}`);
+            const data = await res.json();
+            if (data.found) {
+                showResult(data.set);
+            } else {
+                alert('Set não encontrado. Verifique o número.');
+                if(html5QrCode) html5QrCode.resume();
+            }
+        } catch (e) { 
+            alert('Erro de comunicação.'); 
+            if(html5QrCode) html5QrCode.resume();
+        }
     }
 
     function showResult(set) {
         currentSetNum = set.set_num;
-        document.getElementById('reader').style.display = 'none'; document.getElementById('scannerControls').style.display = 'none'; document.getElementById('scanResult').style.display = 'block';
-        document.getElementById('resImg').src = set.img_url; document.getElementById('resName').innerText = set.name; document.getElementById('resNum').innerText = '#' + set.set_num;
+        document.getElementById('reader').style.display = 'none'; 
+        document.getElementById('scanResult').style.display = 'block';
+        
+        document.getElementById('resImg').src = set.img_url; 
+        document.getElementById('resName').innerText = set.name; 
+        document.getElementById('resNum').innerText = '#' + set.set_num;
+        
         const st = document.getElementById('resStatus');
-        if (set.user_status === 'OWNED') st.innerHTML = '<span class="text-success fw-bold">Já tens!</span>';
-        else if (set.user_status === 'WANTED') st.innerHTML = '<span class="text-danger fw-bold">Na Wishlist.</span>';
-        else st.innerHTML = '<span class="text-muted">Não tens.</span>';
+        if (set.user_status === 'OWNED') st.innerHTML = '<span class="badge bg-success">NA COLEÇÃO</span>';
+        else if (set.user_status === 'WANTED') st.innerHTML = '<span class="badge bg-danger">NA WISHLIST</span>';
+        else st.innerHTML = '<span class="text-muted small">Não tens este set</span>';
     }
 
-    async function performAction(s) { if(currentSetNum) { await toggleStatus(currentSetNum, s); stopScanner(); bootstrap.Modal.getInstance(scanModal).hide(); window.location.reload(); } }
-    function resetScanner() { document.getElementById('scanResult').style.display = 'none'; document.getElementById('reader').style.display = 'block'; document.getElementById('scannerControls').style.display = 'block'; html5QrCode.resume(); }
-    function stopScanner() { if (html5QrCode && html5QrCode.isScanning) html5QrCode.stop().then(()=>html5QrCode.clear()); }
+    function resetUI() {
+        document.getElementById('scanResult').style.display = 'none';
+        document.getElementById('reader').style.display = 'block';
+        document.getElementById('scannerControls').style.display = 'block';
+        document.getElementById('manualSetNum').value = '';
+        if(html5QrCode && !html5QrCode.isScanning) html5QrCode.resume();
+    }
+
+    function resetScanner() {
+        resetUI();
+    }
+
+    function stopScanner() { 
+        if (html5QrCode && html5QrCode.isScanning) html5QrCode.stop().then(()=>html5QrCode.clear()); 
+    }
+
+    async function performAction(s) { 
+        if(currentSetNum) { 
+            await toggleStatus(currentSetNum, s); 
+            stopScanner(); 
+            bootstrap.Modal.getInstance(scanModal).hide(); 
+            window.location.reload(); 
+        } 
+    }
     
-    // Funções Antigas
+    // Funções Antigas (Filtros, DarkMode)
     document.getElementById('themeSearchInput').addEventListener('keyup', (e) => { const term = e.target.value.toLowerCase(); document.querySelectorAll('.theme-item').forEach(item => { item.style.display = item.textContent.toLowerCase().includes(term) ? '' : 'none'; }); });
     function changeLimit(val) { document.getElementById('limitInput').value = val; savePref('items_per_page', val); submitPage(1); }
     function changeSort(val) { document.getElementById('sortInput').value = val; submitPage(1); }
