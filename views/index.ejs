@@ -65,15 +65,15 @@
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header bg-dark text-white border-secondary">
-                <h5 class="modal-title fs-6"><i class="bi bi-qr-code-scan"></i> Scanner</h5>
+                <h5 class="modal-title fs-6"><i class="bi bi-qr-code-scan"></i> Scanner (c/ Auto-Aprendizagem)</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close" onclick="stopScanner()"></button>
             </div>
             
             <div class="modal-body p-0 position-relative bg-black">
                 <div id="reader" style="width:100%;"></div>
-
+                
                 <div id="feedbackArea" class="text-white text-center p-2 small border-top border-secondary">
-                    <span id="debugScan">A aguardar leitura...</span>
+                    <span id="debugScan">Aponte para o código...</span>
                 </div>
 
                 <div id="scanResult" class="p-4 bg-body text-center" style="display:none;">
@@ -105,8 +105,8 @@
 
                 <div class="input-group input-group-sm">
                     <span class="input-group-text bg-secondary text-white border-0">#</span>
-                    <input type="number" id="manualSetNum" class="form-control bg-black text-white border-secondary" placeholder="Set errado? Digite o nº aqui...">
-                    <button class="btn btn-primary" onclick="manualSearch()">Pesquisar</button>
+                    <input type="number" id="manualSetNum" class="form-control bg-black text-white border-secondary" placeholder="Falhou? Digite o nº aqui...">
+                    <button class="btn btn-primary" onclick="manualSearch()">Corrigir</button>
                 </div>
             </div>
         </div>
@@ -149,14 +149,12 @@
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-    let html5QrCode; let currentSetNum = null;
+    let html5QrCode; let currentSetNum = null; let lastFailedBarcode = null;
     const scanModal = document.getElementById('scanModal');
     
-    // Iniciar Scanner ao abrir modal
     scanModal.addEventListener('shown.bs.modal', startScanner);
     scanModal.addEventListener('hidden.bs.modal', stopScanner);
 
-    // Permitir Enter no input manual
     document.getElementById('manualSetNum').addEventListener('keypress', function (e) {
         if (e.key === 'Enter') manualSearch();
     });
@@ -170,11 +168,9 @@
             
             if (cameras && cameras.length) {
                 cameras.forEach(c => { const opt = document.createElement('option'); opt.value = c.id; opt.text = c.label; camSelect.appendChild(opt); });
-                // Tenta selecionar câmara traseira
                 let selected = cameras.find(c => c.label.toLowerCase().includes('back') || c.label.toLowerCase().includes('environment')) || cameras[0];
                 camSelect.value = selected.id;
                 initReader(selected.id);
-                
                 camSelect.onchange = () => stopScanner().then(() => initReader(camSelect.value));
             } else {
                 document.getElementById('debugScan').innerText = "Erro: Sem câmaras.";
@@ -203,10 +199,9 @@
     }
 
     async function onScanSuccess(txt) {
-        // Pausa e mostra o que foi lido
         html5QrCode.pause();
         document.getElementById('debugScan').innerHTML = `<span class="text-warning">Lido: ${txt}</span>. A pesquisar...`;
-        await searchSet(txt);
+        await searchSet(txt, false); // false = é scan
     }
 
     async function manualSearch() {
@@ -214,10 +209,10 @@
         if (!num) return;
         if(html5QrCode && html5QrCode.isScanning) html5QrCode.pause();
         document.getElementById('debugScan').innerText = `A pesquisar manual: ${num}...`;
-        await searchSet(num);
+        await searchSet(num, true); // true = é manual
     }
 
-    async function searchSet(query) {
+    async function searchSet(query, isManual) {
         try {
             const res = await fetch(`/api/scan?code=${query}`);
             const data = await res.json();
@@ -225,17 +220,36 @@
             if (data.found) {
                 showResult(data.set);
                 document.getElementById('debugScan').innerText = "Sucesso!";
+
+                // --- APRENDIZAGEM INTELIGENTE ---
+                // Se foi manual E tinhamos um código falhado antes, associar!
+                if (isManual && lastFailedBarcode) {
+                    await fetch('/api/scan/associate', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ barcode: lastFailedBarcode, set_num: data.set.set_num })
+                    });
+                    console.log(`Associado: ${lastFailedBarcode} -> ${data.set.set_num}`);
+                    lastFailedBarcode = null; // Limpa para não associar erradamente depois
+                }
+                // ---------------------------------
+
             } else {
-                // Mostra o erro no debug
                 const scanned = data.scanned_code || query;
                 document.getElementById('debugScan').innerHTML = `<span class="text-danger">Não encontrado: ${scanned}</span>`;
-                alert(`Código '${scanned}' não encontrado. Verifique o número e tente manualmente.`);
+                
+                // Guarda o código que falhou para associar depois
+                if (!isManual) {
+                    lastFailedBarcode = scanned;
+                    alert(`O código '${scanned}' não foi encontrado.\n\nDigite o número correto abaixo para ensinar o sistema!`);
+                } else {
+                    alert('Número de set não encontrado.');
+                }
                 
                 if(html5QrCode) html5QrCode.resume();
             }
         } catch (e) { 
             document.getElementById('debugScan').innerText = "Erro de rede.";
-            alert('Erro de comunicação.'); 
             if(html5QrCode) html5QrCode.resume();
         }
     }
@@ -244,7 +258,7 @@
         currentSetNum = set.set_num;
         document.getElementById('reader').style.display = 'none'; 
         document.getElementById('scanResult').style.display = 'block';
-        document.getElementById('feedbackArea').style.display = 'none'; // Esconde debug no sucesso
+        document.getElementById('feedbackArea').style.display = 'none'; 
         
         document.getElementById('resImg').src = set.img_url; 
         document.getElementById('resName').innerText = set.name; 
@@ -263,15 +277,14 @@
         document.getElementById('scannerControls').style.display = 'block';
         document.getElementById('manualSetNum').value = '';
         document.getElementById('debugScan').innerText = "Aponte a câmara...";
+        // Não limpamos lastFailedBarcode aqui para permitir correção lenta
         if(html5QrCode && !html5QrCode.isScanning) html5QrCode.resume();
     }
 
-    function resetScanner() {
-        resetUI();
-    }
-
+    function resetScanner() { resetUI(); }
     function stopScanner() { 
         if (html5QrCode && html5QrCode.isScanning) html5QrCode.stop().then(()=>html5QrCode.clear()); 
+        lastFailedBarcode = null; // Limpa ao fechar
     }
 
     async function performAction(s) { 
