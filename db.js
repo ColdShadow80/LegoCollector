@@ -1,5 +1,7 @@
 const sqlite3 = require('sqlite3').verbose();
-const db = new sqlite3.Database('./lego_tracker.db');
+
+// CORREÇÃO: Apontar para 'lego.db' (a base de dados original com dados)
+const db = new sqlite3.Database('./lego.db');
 
 db.serialize(() => {
     // Tabela de Utilizadores
@@ -56,7 +58,8 @@ db.serialize(() => {
         FOREIGN KEY (set_num) REFERENCES sets(set_num)
     )`);
 
-    // NOVA TABELA (V11.2): Aprendizagem de Barcodes
+    // NOVA TABELA (V11): Aprendizagem de Barcodes
+    // (Será criada automaticamente na sua BD antiga se não existir)
     db.run(`CREATE TABLE IF NOT EXISTS barcodes (
         code TEXT PRIMARY KEY,
         set_num TEXT
