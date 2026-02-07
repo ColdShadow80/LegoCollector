@@ -1,3 +1,36 @@
+<!DOCTYPE html>
+<html lang="pt" data-bs-theme="<%= (user && user.dark_mode) ? 'dark' : 'light' %>">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LegoTracker V11</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+
+    <style>
+        body { transition: background-color 0.3s, color 0.3s; }
+        .set-card { transition: transform 0.2s; }
+        .set-card:hover { transform: translateY(-3px); }
+        .set-card img { height: 160px; object-fit: contain; padding: 10px; }
+        
+        [data-bs-theme="dark"] .card { background-color: #2b3035; border-color: #495057; }
+        [data-bs-theme="light"] .card { border: 1px solid #dee2e6; }
+        
+        [data-bs-theme="dark"] .is-owned { border: 2px solid #198754; background-color: #1a2e22; }
+        [data-bs-theme="light"] .is-owned { border: 2px solid #198754; background-color: #f8fff9; }
+        [data-bs-theme="dark"] .is-wanted { border: 2px solid #dc3545; background-color: #2c1a1d; }
+        [data-bs-theme="light"] .is-wanted { border: 2px solid #dc3545; background-color: #fff8f8; }
+
+        .badge-owned { position: absolute; top: 8px; right: 8px; font-size: 0.75em; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+        .sidebar-scroll { max-height: 60vh; overflow-y: auto; scrollbar-width: thin; }
+        
+        #reader { width: 100%; border-radius: 12px; overflow: hidden; background: #000; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+        #reader video { object-fit: cover; border-radius: 12px; }
+    </style>
+</head>
+<body>
+
 <nav class="navbar navbar-expand-lg border-bottom mb-4 shadow-sm sticky-top bg-body">
     <div class="container-fluid px-3 px-lg-4">
         <a class="navbar-brand fw-bold text-primary" href="/">🧱 LegoTracker</a>
@@ -13,7 +46,7 @@
                         <a class="nav-link" href="/dashboard"><i class="bi bi-speedometer2"></i> Dashboard</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="/?status=owned"><i class="bi bi-box-seam"></i> Coleção</a>
+                        <a class="nav-link" href="/?status=owned"><i class="bi bi-box-seam"></i> Minha Coleção</a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="/?status=wanted"><i class="bi bi-heart"></i> Wishlist</a>
@@ -64,3 +97,308 @@
         </div>
     </div>
 </nav>
+
+<div class="modal fade" id="scanModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-dark text-white border-secondary">
+                <h5 class="modal-title fs-6"><i class="bi bi-qr-code-scan"></i> Scanner AI</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close" onclick="stopScanner()"></button>
+            </div>
+            
+            <div class="modal-body p-0 bg-black position-relative">
+                <div id="reader" style="width:100%;"></div>
+                
+                <div id="feedbackArea" class="text-white text-center p-2 small border-top border-secondary">
+                    <span id="debugScan">Aponte a câmara...</span>
+                </div>
+
+                <div id="scanResult" class="p-4 bg-body text-center" style="display:none;">
+                    <div class="card shadow-sm mx-auto mb-3 border-0" style="max-width: 200px;">
+                        <img id="resImg" src="" class="card-img-top rounded" style="height: 150px; object-fit: contain;">
+                    </div>
+                    <h5 id="resName" class="fw-bold mb-1 text-truncate"></h5>
+                    <span id="resNum" class="badge bg-secondary mb-3"></span>
+                    <div id="resStatus" class="mb-3"></div>
+
+                    <div class="d-flex gap-2 justify-content-center">
+                        <button class="btn btn-outline-danger flex-fill" onclick="performAction('WANTED')">Quero</button>
+                        <button class="btn btn-success flex-fill" onclick="performAction('OWNED')">Tenho</button>
+                    </div>
+                    <button class="btn btn-link btn-sm mt-3 text-decoration-none" onclick="resetScanner()">Ler outro</button>
+                </div>
+            </div>
+
+            <div class="modal-footer bg-dark border-secondary p-2 d-block">
+                <div id="scannerControls">
+                    <div class="input-group input-group-sm mb-2">
+                        <label class="input-group-text bg-secondary text-white border-0"><i class="bi bi-camera-video"></i></label>
+                        <select class="form-select bg-black text-white border-secondary" id="cameraSelection"></select>
+                    </div>
+                    <div id="zoomContainer" class="d-none px-1 mb-2">
+                        <input type="range" class="form-range" id="zoomSlider" min="1" max="5" step="0.1" value="1">
+                    </div>
+                </div>
+
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text bg-secondary text-white border-0">#</span>
+                    <input type="number" id="manualSetNum" class="form-control bg-black text-white border-secondary" placeholder="Falhou? Digite o nº aqui...">
+                    <button class="btn btn-primary" onclick="manualSearch()">Corrigir</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="container-fluid px-3 px-lg-4">
+    <div class="row">
+        <div class="col-md-3 col-lg-2 mb-4">
+            <% if (user) { %>
+            <div class="list-group shadow-sm mb-4 border-0">
+                <a href="/?status=owned" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center <%= query.status == 'owned' ? 'active' : '' %>">
+                    <span><i class="bi bi-box-seam me-2"></i> Coleção</span>
+                </a>
+                <a href="/?status=wanted" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center <%= query.status == 'wanted' ? 'active' : '' %>">
+                    <span><i class="bi bi-heart me-2"></i> Wishlist</span>
+                </a>
+                <a href="/" class="list-group-item list-group-item-action <%= !query.status ? 'active' : '' %>">
+                    <span><i class="bi bi-grid me-2"></i> Tudo</span>
+                </a>
+            </div>
+            <% } %>
+
+            <div class="card shadow-sm border-0">
+                <div class="card-body p-3">
+                    <form action="/" method="GET" id="filterForm">
+                        <h6 class="fw-bold mb-3 text-uppercase small text-muted">Filtros</h6>
+                        <div class="mb-3"><input type="text" name="search" class="form-control form-control-sm" placeholder="Pesquisar..." value="<%= query.search || '' %>"></div>
+                        <div class="mb-3"><select name="year" class="form-select form-select-sm"><option value="">Ano (Todos)</option><% allYears.forEach(y => { %><option value="<%= y.year %>" <%= query.year == y.year ? 'selected' : '' %>><%= y.year %></option><% }) %></select></div>
+                        <div class="mb-2"><input type="text" id="themeSearchInput" class="form-control form-control-sm mb-2" placeholder="Procurar Tema...">
+                            <div class="sidebar-scroll border rounded p-2 bg-body-tertiary" id="themeListContainer">
+                                <% allThemes.forEach(t => { %>
+                                <div class="form-check mb-1 theme-item">
+                                    <input class="form-check-input" type="checkbox" name="themes" value="<%= t.name %>" id="t-<%= t.name %>" <% if (query.themes && (query.themes === t.name || (Array.isArray(query.themes) && query.themes.includes(t.name)))) { %> checked <% } %>>
+                                    <label class="form-check-label small lh-sm text-truncate w-100" for="t-<%= t.name %>"><%= t.name %></label>
+                                </div>
+                                <% }) %>
+                            </div>
+                        </div>
+                        <div class="d-grid gap-2 mt-3">
+                            <button type="submit" class="btn btn-primary btn-sm">Aplicar</button>
+                            <a href="/" class="btn btn-outline-secondary btn-sm">Limpar</a>
+                        </div>
+                        <input type="hidden" name="limit" id="limitInput" value="<%= pagination.limit %>">
+                        <input type="hidden" name="page" value="<%= pagination.page %>">
+                        <input type="hidden" name="sort" id="sortInput" value="<%= query.sort || '' %>">
+                        <% if(query.status) { %><input type="hidden" name="status" value="<%= query.status %>"><% } %>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-9 col-lg-10">
+            <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom flex-wrap gap-2">
+                <div>
+                    <h5 class="mb-0 fw-bold">
+                        <% if(query.status == 'owned') { %> 📦 Minha Coleção <% } else if(query.status == 'wanted') { %> ❤️ Lista de Desejos <% } else { %> 🌍 Explorar Sets <% } %>
+                    </h5>
+                    <small class="text-muted"><%= pagination.totalItems %> resultados</small>
+                </div>
+                <div class="d-flex gap-2">
+                    <select class="form-select form-select-sm shadow-sm" style="width: auto;" onchange="changeSort(this.value)">
+                        <option value="" <%= !query.sort ? 'selected' : '' %>>Relevância</option>
+                        <option value="year_desc" <%= query.sort == 'year_desc' ? 'selected' : '' %>>Ano (Novo &rarr; Velho)</option>
+                        <option value="year_asc" <%= query.sort == 'year_asc' ? 'selected' : '' %>>Ano (Velho &rarr; Novo)</option>
+                        <option value="parts_desc" <%= query.sort == 'parts_desc' ? 'selected' : '' %>>Mais Peças</option>
+                        <option value="name_asc" <%= query.sort == 'name_asc' ? 'selected' : '' %>>Nome (A-Z)</option>
+                        <option value="added_desc" <%= query.sort == 'added_desc' ? 'selected' : '' %>>Adicionado</option>
+                    </select>
+                </div>
+            </div>
+
+            <% if (sets.length === 0) { %>
+                <div class="text-center py-5">
+                    <div class="display-1 text-muted opacity-25">👻</div>
+                    <h4 class="text-muted mt-3">Nada encontrado aqui.</h4>
+                    <p class="small text-muted">Tente mudar os filtros ou use o Scanner.</p>
+                </div>
+            <% } %>
+
+            <div class="row row-cols-2 row-cols-md-3 row-cols-lg-4 row-cols-xl-5 g-3">
+                <% sets.forEach(set => { %>
+                <div class="col">
+                    <div class="card h-100 set-card shadow-sm position-relative overflow-hidden <%= set.user_status === 'OWNED' ? 'is-owned' : (set.user_status === 'WANTED' ? 'is-wanted' : '') %>" id="card-<%= set.set_num %>">
+                        
+                        <% if (set.user_status === 'OWNED') { %>
+                            <span class="badge bg-success badge-owned"><i class="bi bi-check-lg"></i></span>
+                        <% } else if (set.user_status === 'WANTED') { %>
+                            <span class="badge bg-danger badge-owned"><i class="bi bi-heart-fill"></i></span>
+                        <% } %>
+
+                        <a href="/set/<%= set.set_num %>" class="d-block text-center bg-body-tertiary">
+                            <img src="<%= set.img_url || 'https://via.placeholder.com/150' %>" class="img-fluid" loading="lazy" alt="<%= set.name %>">
+                        </a>
+
+                        <div class="card-body p-2 d-flex flex-column">
+                            <h6 class="card-title text-truncate small fw-bold mb-1" title="<%= set.name %>"><%= set.name %></h6>
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="badge bg-secondary-subtle text-secondary-emphasis rounded-pill border" style="font-size: 0.7em;"><%= set.year %></span>
+                                <small class="text-muted" style="font-size: 0.7em;">#<%= set.set_num %></small>
+                            </div>
+                            
+                            <% if (user) { %>
+                            <div class="mt-auto d-flex gap-1 pt-2 border-top">
+                                <button class="btn btn-sm flex-fill <%= set.user_status === 'WANTED' ? 'btn-danger' : 'btn-outline-danger border-0' %>" onclick="toggleStatus('<%= set.set_num %>', 'WANTED')" title="Quero">
+                                    <i class="bi <%= set.user_status === 'WANTED' ? 'bi-heart-fill' : 'bi-heart' %>"></i>
+                                </button>
+                                <button class="btn btn-sm flex-fill <%= set.user_status === 'OWNED' ? 'btn-success' : 'btn-outline-success border-0' %>" onclick="toggleStatus('<%= set.set_num %>', 'OWNED')" title="Tenho">
+                                    <i class="bi <%= set.user_status === 'OWNED' ? 'bi-check-lg' : 'bi-plus-lg' %>"></i>
+                                </button>
+                            </div>
+                            <% } %>
+                        </div>
+                    </div>
+                </div>
+                <% }); %>
+            </div>
+
+            <% if (pagination.totalPages > 1) { %> 
+                <nav class="mt-5 pb-5 d-flex justify-content-center">
+                    <ul class="pagination pagination-sm shadow-sm">
+                        <li class="page-item <%= pagination.page == 1 ? 'disabled' : '' %>">
+                            <button class="page-link" onclick="changePage(<%= pagination.page - 1 %>)">&laquo;</button>
+                        </li>
+                        <li class="page-item disabled"><span class="page-link text-dark fw-bold">Página <%= pagination.page %></span></li>
+                        <li class="page-item <%= pagination.page >= pagination.totalPages ? 'disabled' : '' %>">
+                            <button class="page-link" onclick="changePage(<%= pagination.page + 1 %>)">&raquo;</button>
+                        </li>
+                    </ul>
+                </nav> 
+            <% } %>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    const themeSwitch = document.getElementById('darkModeSwitch');
+    if (themeSwitch) {
+        themeSwitch.addEventListener('change', function() {
+            const isDark = this.checked;
+            document.documentElement.setAttribute('data-bs-theme', isDark ? 'dark' : 'light');
+            fetch('/api/preferences', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ dark_mode: isDark })
+            }).catch(console.error);
+        });
+    }
+
+    document.getElementById('themeSearchInput').addEventListener('keyup', (e) => { 
+        const term = e.target.value.toLowerCase(); 
+        document.querySelectorAll('.theme-item').forEach(item => { 
+            item.style.display = item.textContent.toLowerCase().includes(term) ? '' : 'none'; 
+        }); 
+    });
+
+    function changeSort(val) { document.getElementById('sortInput').value = val; submitPage(1); }
+    function changeLimit(val) { document.getElementById('limitInput').value = val; submitPage(1); }
+    function changePage(p) { if(p>0) submitPage(p); }
+    function submitPage(p) { document.querySelector('input[name="page"]').value = p; document.getElementById('filterForm').submit(); }
+
+    async function toggleStatus(setNum, targetStatus) {
+        const card = document.getElementById('card-' + setNum);
+        let currentStatus = null;
+        if (card.classList.contains('is-owned')) currentStatus = 'OWNED';
+        else if (card.classList.contains('is-wanted')) currentStatus = 'WANTED';
+
+        let newStatus = targetStatus;
+        if (currentStatus === targetStatus) newStatus = 'REMOVE'; 
+
+        try { 
+            const res = await fetch('/api/toggle', { 
+                method: 'POST', 
+                headers: {'Content-Type':'application/json'}, 
+                body: JSON.stringify({set_num: setNum, status: newStatus})
+            }); 
+            if (res.ok) window.location.reload(); 
+        } catch(e) { alert('Erro de conexão'); }
+    }
+
+    let html5QrCode; let currentSetNum = null; let lastFailedBarcode = null;
+    const scanModal = document.getElementById('scanModal');
+    
+    if(scanModal) {
+        scanModal.addEventListener('shown.bs.modal', startScanner);
+        scanModal.addEventListener('hidden.bs.modal', stopScanner);
+        document.getElementById('manualSetNum').addEventListener('keypress', function (e) { if (e.key === 'Enter') manualSearch(); });
+    }
+
+    async function startScanner() {
+        resetUI();
+        try {
+            const cameras = await Html5Qrcode.getCameras(); 
+            const camSelect = document.getElementById('cameraSelection'); camSelect.innerHTML = '';
+            if (cameras && cameras.length) {
+                cameras.forEach(c => { const opt = document.createElement('option'); opt.value = c.id; opt.text = c.label; camSelect.appendChild(opt); });
+                let selected = cameras.find(c => c.label.toLowerCase().includes('back') || c.label.toLowerCase().includes('environment')) || cameras[0];
+                camSelect.value = selected.id;
+                initReader(selected.id);
+                camSelect.onchange = () => stopScanner().then(() => initReader(camSelect.value));
+            } else { alert('Sem câmara.'); }
+        } catch (e) { console.error(e); }
+    }
+    
+    function initReader(id) {
+        html5QrCode = new Html5Qrcode("reader");
+        html5QrCode.start(id, { fps: 10, qrbox: { width: 250, height: 250 } }, onScanSuccess, () => {}).then(() => setTimeout(checkZoomCapability, 500));
+    }
+
+    function checkZoomCapability() {
+        try {
+            const track = html5QrCode.getRunningTrackCameraCapabilities();
+            if (track && track.zoomFeature() && track.zoomFeature().isSupported()) {
+                const z = track.zoomFeature(); const slider = document.getElementById('zoomSlider');
+                document.getElementById('zoomContainer').classList.remove('d-none');
+                slider.min = z.min(); slider.max = z.max(); slider.step = z.step(); slider.value = z.value();
+                slider.oninput = function() { html5QrCode.applyVideoConstraints({ zoom: parseFloat(this.value) }); };
+            }
+        } catch(e){}
+    }
+
+    async function onScanSuccess(txt) { html5QrCode.pause(); document.getElementById('debugScan').innerHTML = `<span class="text-warning">Lido: ${txt}</span>...`; await searchSet(txt, false); }
+    async function manualSearch() { const num = document.getElementById('manualSetNum').value; if (!num) return; if(html5QrCode && html5QrCode.isScanning) html5QrCode.pause(); await searchSet(num, true); }
+
+    async function searchSet(query, isManual) {
+        try {
+            const res = await fetch(`/api/scan?code=${query}`); const data = await res.json();
+            if (data.found) {
+                showResult(data.set);
+                if (isManual && lastFailedBarcode) { await fetch('/api/scan/associate', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ barcode: lastFailedBarcode, set_num: data.set.set_num }) }); lastFailedBarcode = null; }
+            } else {
+                const scanned = data.scanned_code || query;
+                document.getElementById('debugScan').innerHTML = `<span class="text-danger">Erro: ${scanned}</span>`;
+                if (!isManual) { lastFailedBarcode = scanned; alert(`Código '${scanned}' desconhecido. Digite o número manual para ensinar.`); } 
+                else { alert('Número não encontrado.'); }
+                if(html5QrCode) html5QrCode.resume();
+            }
+        } catch (e) { if(html5QrCode) html5QrCode.resume(); }
+    }
+
+    function showResult(set) {
+        currentSetNum = set.set_num;
+        document.getElementById('reader').style.display = 'none'; document.getElementById('scanResult').style.display = 'block'; document.getElementById('feedbackArea').style.display = 'none';
+        document.getElementById('resImg').src = set.img_url; document.getElementById('resName').innerText = set.name; document.getElementById('resNum').innerText = '#' + set.set_num;
+        const st = document.getElementById('resStatus');
+        if (set.user_status === 'OWNED') st.innerHTML = '<span class="badge bg-success">NA COLEÇÃO</span>';
+        else if (set.user_status === 'WANTED') st.innerHTML = '<span class="badge bg-danger">NA WISHLIST</span>';
+        else st.innerHTML = '<span class="text-muted small">Não tens.</span>';
+    }
+
+    function resetUI() { document.getElementById('scanResult').style.display = 'none'; document.getElementById('reader').style.display = 'block'; document.getElementById('feedbackArea').style.display = 'block'; document.getElementById('debugScan').innerText = "Aponte..."; if(html5QrCode && !html5QrCode.isScanning) html5QrCode.resume(); }
+    function resetScanner() { resetUI(); }
+    function stopScanner() { if (html5QrCode && html5QrCode.isScanning) html5QrCode.stop().then(()=>html5QrCode.clear()); lastFailedBarcode = null; }
+    async function performAction(s) { if(currentSetNum) { await toggleStatus(currentSetNum, s); stopScanner(); bootstrap.Modal.getInstance(scanModal).hide(); window.location.reload(); } }
+</script>
+</body>
+</html>
