@@ -40,9 +40,9 @@
         <div class="col-md-3">
             <div class="card shadow-sm border-0 stats-card border-start border-4 border-warning">
                 <div class="card-body">
-                    <h6 class="text-muted small text-uppercase fw-bold">Custo Total (Gasto)</h6>
+                    <h6 class="text-muted small text-uppercase fw-bold">Investimento (Gasto)</h6>
                     <h3 class="fw-bold text-warning">€ <%= stats.total_spent ? stats.total_spent.toLocaleString('pt-PT', {minimumFractionDigits: 2}) : '0,00' %></h3>
-                    <small class="text-muted">Investimento Real</small>
+                    <small class="text-muted">Valor pago real</small>
                 </div>
             </div>
         </div>
@@ -67,7 +67,7 @@
                 <div class="card-body">
                     <h6 class="text-muted small text-uppercase fw-bold">Lista de Desejos</h6>
                     <h3 class="fw-bold text-danger"><%= wishlist.wanted_count %> Sets</h3>
-                    <small class="text-muted">Est. € <%= wishlist.wanted_value ? wishlist.wanted_value.toLocaleString('pt-PT') : '0' %></small>
+                    <small class="text-muted">PVP Est. € <%= wishlist.wanted_value ? wishlist.wanted_value.toLocaleString('pt-PT') : '0' %></small>
                 </div>
             </div>
         </div>
@@ -86,7 +86,7 @@
         </div>
         <div class="col-md-6">
             <div class="card shadow-sm border-0 h-100">
-                <div class="card-header bg-transparent fw-bold">Sets por Ano de Lançamento</div>
+                <div class="card-header bg-transparent fw-bold">Sets por Ano</div>
                 <div class="card-body">
                     <canvas id="chartYears"></canvas>
                 </div>
@@ -120,7 +120,7 @@
             data: {
                 labels: yearsData.map(y => y.year),
                 datasets: [{
-                    label: 'Quantidade de Sets',
+                    label: 'Quantidade',
                     data: yearsData.map(y => y.count),
                     backgroundColor: '#0dcaf0',
                     borderRadius: 4
