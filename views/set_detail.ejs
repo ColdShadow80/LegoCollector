@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="pt" data-bs-theme="<%= user && user.dark_mode ? 'dark' : 'light' %>">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= set.name %> - Detalhes</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+</head>
+<body class="bg-body-tertiary">
+
+<div class="container py-5">
+    <div class="mb-3">
+        <a href="javascript:history.back()" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> Voltar</a>
+    </div>
+
+    <div class="card shadow-sm overflow-hidden">
+        <div class="row g-0">
+            <div class="col-md-5 bg-body d-flex align-items-center justify-content-center p-4">
+                <img src="<%= set.img_url %>" class="img-fluid rounded" style="max-height: 400px; object-fit: contain;" alt="<%= set.name %>">
+            </div>
+            
+            <div class="col-md-7">
+                <div class="card-body p-4 p-md-5 d-flex flex-column h-100">
+                    <div>
+                        <span class="badge bg-secondary mb-2"><%= set.theme_name %></span>
+                        <% if (set.user_status === 'OWNED') { %><span class="badge bg-success mb-2">NA COLEÇÃO</span><% } %>
+                        <% if (set.user_status === 'WANTED') { %><span class="badge bg-danger mb-2">LISTA DE DESEJOS</span><% } %>
+                        
+                        <h1 class="card-title fw-bold mb-1"><%= set.name %></h1>
+                        <h4 class="text-primary mb-3">#<%= set.set_num %></h4>
+                        
+                        <div class="row mb-4 text-muted">
+                            <div class="col-6 col-sm-4 mb-2">
+                                <small class="d-block fw-bold text-uppercase">Ano</small>
+                                <span><%= set.year %></span>
+                            </div>
+                            <div class="col-6 col-sm-4 mb-2">
+                                <small class="d-block fw-bold text-uppercase">Peças</small>
+                                <span><%= set.num_parts %></span>
+                            </div>
+                            <div class="col-6 col-sm-4 mb-2">
+                                <small class="d-block fw-bold text-uppercase">Data EOL</small>
+                                <span><%= set.eol_date || 'Ativo' %></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-auto">
+                        <hr>
+                        <div class="d-flex flex-wrap gap-2">
+                            <% if (user) { %>
+                                <% if (set.user_status === 'OWNED') { %>
+                                    <button class="btn btn-outline-danger flex-grow-1" onclick="toggleStatus('REMOVE')">
+                                        <i class="bi bi-trash"></i> Remover da Coleção
+                                    </button>
+                                <% } else if (set.user_status === 'WANTED') { %>
+                                    <button class="btn btn-success flex-grow-1" onclick="toggleStatus('OWNED')">
+                                        <i class="bi bi-check-lg"></i> Já Comprei! (Mover para Coleção)
+                                    </button>
+                                    <button class="btn btn-outline-danger" onclick="toggleStatus('REMOVE')">
+                                        <i class="bi bi-x-lg"></i> Remover
+                                    </button>
+                                <% } else { %>
+                                    <button class="btn btn-success flex-grow-1" onclick="toggleStatus('OWNED')">
+                                        <i class="bi bi-plus-lg"></i> Adicionar à Coleção
+                                    </button>
+                                    <button class="btn btn-outline-danger flex-grow-1" onclick="toggleStatus('WANTED')">
+                                        <i class="bi bi-heart"></i> Quero Comprar
+                                    </button>
+                                <% } %>
+                            <% } else { %>
+                                <a href="/login" class="btn btn-primary flex-grow-1">Login para gerir</a>
+                            <% } %>
+                            
+                            <a href="<%= set.rb_url %>" target="_blank" class="btn btn-secondary" title="Ver no Rebrickable">
+                                <i class="bi bi-box-arrow-up-right"></i> RB
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    async function toggleStatus(status) {
+        try {
+            const res = await fetch('/api/toggle', { 
+                method: 'POST', 
+                headers: {'Content-Type':'application/json'}, 
+                body: JSON.stringify({set_num: '<%= set.set_num %>', status: status})
+            });
+            if (res.ok) window.location.reload();
+        } catch(e) { alert('Erro'); }
+    }
+</script>
+</body>
+</html>
