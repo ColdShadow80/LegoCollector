@@ -2,101 +2,61 @@
 <html lang="pt" data-bs-theme="<%= (user && user.dark_mode) ? 'dark' : 'light' %>">
 <head>
     <meta charset="UTF-8">
-    <title>Admin Temas - LegoTracker</title>
+    <title>Admin Temas</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
 </head>
 <body class="bg-body-tertiary">
-    
     <nav class="navbar navbar-dark bg-dark mb-4 px-3 shadow">
-        <div class="container-fluid">
-            <span class="navbar-brand mb-0 h1"><i class="bi bi-shield-lock"></i> Admin Painel</span>
-            <div class="d-flex gap-2">
-                <a href="/admin/sets" class="btn btn-sm btn-outline-secondary">Sets</a>
-                <a href="/admin/themes" class="btn btn-sm btn-light active">Temas</a>
-                <a href="/admin/users" class="btn btn-sm btn-outline-secondary">Users</a>
-                <a href="/" class="btn btn-outline-primary btn-sm ms-3">Voltar ao Site</a>
-            </div>
-        </div>
+        <span class="navbar-brand">Admin Painel</span>
+        <a href="/" class="btn btn-outline-primary btn-sm">Voltar</a>
     </nav>
 
     <div class="container pb-5">
         <div class="card shadow-sm border-0">
-            <div class="card-header bg-body border-bottom">
-                <h4 class="mb-0">🧩 Gestão de Temas</h4>
-                <p class="text-muted small mb-0">Defina quais os temas visíveis e quais devem ser ignorados nas atualizações de peças (API).</p>
-            </div>
-            <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table table-hover align-middle mb-0 table-striped">
-                        <thead class="table-light">
-                            <tr>
-                                <th>ID</th>
-                                <th>Nome do Tema</th>
-                                <th>Estatísticas (Sets)</th>
-                                <th class="text-center">Esconder?</th>
-                                <th class="text-center">Ignorar Peças?</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <% themes.forEach(t => { %>
-                            <tr>
-                                <td class="text-muted small">#<%= t.id %></td>
-                                <td class="fw-bold"><%= t.name %></td>
-                                
-                                <td>
-                                    <div class="d-flex gap-2">
-                                        <span class="badge bg-secondary" title="Total de Sets neste tema">
-                                            <%= t.total_sets %> Sets
-                                        </span>
-                                        <% if (t.zero_part_sets > 0) { %>
-                                            <span class="badge bg-warning text-dark" title="Sets sem contagem de peças (ex: porta-chaves, livros)">
-                                                ⚠️ <%= t.zero_part_sets %> (0-Peças)
-                                            </span>
-                                        <% } %>
-                                    </div>
-                                    <small class="text-muted" style="font-size: 0.75em;">
-                                        Anos: <%= t.min_year %> - <%= t.max_year %>
-                                    </small>
-                                </td>
-
-                                <td class="text-center">
-                                    <div class="form-check form-switch d-inline-block">
-                                        <input class="form-check-input" type="checkbox" 
-                                               onchange="toggle(<%= t.id %>, 'is_hidden', this.checked)" 
-                                               <%= t.is_hidden ? 'checked' : '' %>>
-                                    </div>
-                                </td>
-
-                                <td class="text-center bg-light border-start">
-                                    <div class="form-check form-switch d-inline-block">
-                                        <input class="form-check-input" type="checkbox" 
-                                               onchange="toggle(<%= t.id %>, 'ignore_parts', this.checked)" 
-                                               <%= t.ignore_parts ? 'checked' : '' %>>
-                                    </div>
-                                    <div class="small text-muted" style="font-size: 0.7em;">Não atualizar peças</div>
-                                </td>
-                            </tr>
-                            <% }) %>
-                        </tbody>
-                    </table>
-                </div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Nome do Tema</th>
+                            <th>Estatísticas (Sets & Peças)</th>
+                            <th class="text-center">Ignorar Peças?</th>
+                            <th class="text-center">Esconder?</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <% themes.forEach(t => { %>
+                        <tr>
+                            <td class="fw-bold"><%= t.name %></td>
+                            <td>
+                                <div class="d-flex flex-column gap-1">
+                                    <span class="badge bg-secondary w-auto"><i class="bi bi-box-seam"></i> <%= t.total_sets %> Sets</span>
+                                    <span class="badge bg-info text-dark w-auto"><i class="bi bi-puzzle"></i> <%= t.total_parts.toLocaleString() %> Peças</span>
+                                    <% if (t.zero_part_sets > 0) { %>
+                                        <span class="badge bg-warning text-dark w-auto">⚠️ <%= t.zero_part_sets %> s/ peças</span>
+                                    <% } %>
+                                </div>
+                            </td>
+                            <td class="text-center">
+                                <div class="form-check form-switch d-inline-block">
+                                    <input class="form-check-input" type="checkbox" onchange="toggle(<%= t.id %>, 'ignore_parts', this.checked)" <%= t.ignore_parts ? 'checked' : '' %>>
+                                </div>
+                            </td>
+                            <td class="text-center">
+                                <div class="form-check form-switch d-inline-block">
+                                    <input class="form-check-input" type="checkbox" onchange="toggle(<%= t.id %>, 'is_hidden', this.checked)" <%= t.is_hidden ? 'checked' : '' %>>
+                                </div>
+                            </td>
+                        </tr>
+                        <% }) %>
+                    </tbody>
+                </table>
             </div>
         </div>
     </div>
-
     <script>
         async function toggle(id, field, val) {
-            try {
-                const res = await fetch('/admin/themes/toggle', {
-                    method: 'POST', 
-                    headers: {'Content-Type':'application/json'},
-                    body: JSON.stringify({ theme_id: id, field: field, value: val })
-                });
-                if (!res.ok) alert('Erro ao guardar alteração.');
-            } catch (e) {
-                alert('Erro de conexão.');
-            }
+            await fetch('/admin/themes/toggle', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ theme_id: id, field, value: val })});
         }
     </script>
 </body>
