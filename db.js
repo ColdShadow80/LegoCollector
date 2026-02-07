@@ -17,7 +17,7 @@ const MIGRATIONS = [
     // V7 & V8
     `ALTER TABLE user_sets ADD COLUMN status TEXT DEFAULT 'OWNED'; ALTER TABLE user_sets ADD COLUMN quantity INTEGER DEFAULT 1;`,
     `ALTER TABLE user_sets ADD COLUMN build_status TEXT DEFAULT 'Montado'; ALTER TABLE user_sets ADD COLUMN location TEXT;`,
-    // V9: Preço de Compra (Custo Pessoal)
+    // V9 & V10: Preço de Compra (Custo Pessoal)
     `ALTER TABLE user_sets ADD COLUMN purchase_price REAL DEFAULT 0;`
 ];
 
