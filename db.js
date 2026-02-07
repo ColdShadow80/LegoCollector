@@ -20,9 +20,9 @@ const MIGRATIONS = [
     // V7
     `ALTER TABLE user_sets ADD COLUMN status TEXT DEFAULT 'OWNED'; ALTER TABLE user_sets ADD COLUMN quantity INTEGER DEFAULT 1;`,
     
-    // V8: ESTADO DE CONSTRUÇÃO E LOCALIZAÇÃO (NOVO)
-    `ALTER TABLE user_sets ADD COLUMN build_status TEXT DEFAULT 'Montado'; -- Ex: Montado, Selado, Desmontado
-     ALTER TABLE user_sets ADD COLUMN location TEXT; -- Ex: Estante Sala, Caixa 3`
+    // V8: Limpo de comentários para evitar SQLITE_MISUSE
+    `ALTER TABLE user_sets ADD COLUMN build_status TEXT DEFAULT 'Montado';
+     ALTER TABLE user_sets ADD COLUMN location TEXT;`
 ];
 
 function runMigrations() {
@@ -36,9 +36,12 @@ function runMigrations() {
                     db.run("BEGIN TRANSACTION");
                     for (let i = currentVersion; i < MIGRATIONS.length; i++) {
                         console.log(`   > Aplicando migração v${i + 1}...`);
+                        // O filtro previne comandos vazios causados por quebras de linha extra
                         const commands = MIGRATIONS[i].split(';').filter(cmd => cmd.trim() !== '');
                         commands.forEach(command => {
-                            db.run(command, (err) => { if(err && !err.message.includes('duplicate column')) console.log("Nota:", err.message); });
+                            db.run(command, (err) => { 
+                                if(err && !err.message.includes('duplicate column')) console.log("Nota:", err.message); 
+                            });
                         });
                     }
                     db.run("DELETE FROM schema_version");
