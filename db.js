@@ -2,7 +2,7 @@ const sqlite3 = require('sqlite3').verbose();
 const db = new sqlite3.Database('./lego_tracker.db');
 
 db.serialize(() => {
-    // Tabelas existentes
+    // Tabela de Utilizadores
     db.run(`CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT,
@@ -18,6 +18,7 @@ db.serialize(() => {
         items_per_page INTEGER DEFAULT 25
     )`);
 
+    // Tabela de Sets
     db.run(`CREATE TABLE IF NOT EXISTS sets (
         set_num TEXT PRIMARY KEY,
         name TEXT,
@@ -31,6 +32,7 @@ db.serialize(() => {
         ignore_parts INTEGER DEFAULT 0
     )`);
 
+    // Tabela de Temas
     db.run(`CREATE TABLE IF NOT EXISTS themes (
         id INTEGER PRIMARY KEY,
         name TEXT,
@@ -39,6 +41,7 @@ db.serialize(() => {
         ignore_parts INTEGER DEFAULT 0
     )`);
 
+    // Tabela de Coleção (User <-> Sets)
     db.run(`CREATE TABLE IF NOT EXISTS user_sets (
         user_id INTEGER,
         set_num TEXT,
@@ -53,8 +56,7 @@ db.serialize(() => {
         FOREIGN KEY (set_num) REFERENCES sets(set_num)
     )`);
 
-    // --- NOVA TABELA (V11.2) ---
-    // Guarda associações manuais: Código de Barras -> Numero do Set
+    // NOVA TABELA (V11.2): Aprendizagem de Barcodes
     db.run(`CREATE TABLE IF NOT EXISTS barcodes (
         code TEXT PRIMARY KEY,
         set_num TEXT
