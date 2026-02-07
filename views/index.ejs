@@ -3,15 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LegoTracker V8</title>
+    <title>LegoTracker V10</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
     <style>
         body { transition: background-color 0.3s, color 0.3s; }
         .set-card img { height: 160px; object-fit: contain; padding: 5px; transition: transform 0.2s; }
         .set-card:hover img { transform: scale(1.05); }
+        
+        /* Tema Escuro/Claro para Cartões */
         [data-bs-theme="dark"] .card { background-color: #2b3035; border-color: #495057; }
         
+        /* Estilos de Estado (Owned/Wanted) */
         [data-bs-theme="dark"] .is-owned { background-color: #1a4d2e !important; border-color: #2ea043; }
         [data-bs-theme="light"] .is-owned { border: 2px solid #198754; background-color: #f0fff4; }
         
@@ -20,8 +23,12 @@
 
         .badge-owned { position: absolute; top: 5px; right: 5px; font-size: 0.7em; }
         .sidebar-scroll { max-height: 60vh; overflow-y: auto; }
+        
+        /* Paginação */
         .pagination-select { border: none; background-color: transparent; font-weight: bold; text-align: center; cursor: pointer; }
         [data-bs-theme="dark"] .pagination-select { color: white; background-color: #212529; }
+        
+        /* Botões Redondos nos Cards */
         .card-actions .btn { border-radius: 50%; width: 32px; height: 32px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
     </style>
 </head>
@@ -33,20 +40,25 @@
         
         <div class="d-flex align-items-center gap-3">
             <% if (user) { %>
-                <div class="form-check form-switch pt-1">
+                <div class="form-check form-switch pt-1" title="Modo Escuro">
                     <input class="form-check-input" type="checkbox" id="darkModeSwitch" <%= user.dark_mode ? 'checked' : '' %>>
                     <label class="form-check-label"><i class="bi bi-moon-stars"></i></label>
                 </div>
                 <div class="dropdown">
-                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">👤 <%= user.name %></button>
+                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                        👤 <%= user.name %>
+                    </button>
                     <ul class="dropdown-menu dropdown-menu-end">
+                        
                         <% if (user.id === 1) { %>
-                            <li><h6 class="dropdown-header">Admin</h6></li>
+                            <li><h6 class="dropdown-header">Administração</h6></li>
                             <li><a class="dropdown-item" href="/admin/sets">Sets</a></li>
                             <li><a class="dropdown-item" href="/admin/themes">Temas</a></li>
                             <li><a class="dropdown-item" href="/admin/users">Users</a></li>
                             <li><hr class="dropdown-divider"></li>
                         <% } %>
+
+                        <li><a class="dropdown-item fw-bold text-primary" href="/dashboard"><i class="bi bi-speedometer2"></i> Dashboard</a></li>
                         <li><a class="dropdown-item" href="/?status=owned">Minha Coleção</a></li>
                         <li><a class="dropdown-item" href="/?status=wanted">Lista de Desejos</a></li>
                         <li><hr class="dropdown-divider"></li>
@@ -62,24 +74,28 @@
 
 <div class="container-fluid px-4">
     <div class="row">
+        
         <div class="col-md-3 col-lg-2 mb-4">
             <form action="/" method="GET" id="filterForm">
                 <div class="d-grid gap-2 mb-3">
                     <button type="submit" class="btn btn-primary btn-sm">Aplicar</button>
                     <a href="/" class="btn btn-outline-secondary btn-sm">Limpar</a>
                 </div>
+
                 <div class="mb-3">
                     <label class="small fw-bold">Estado</label>
                     <select name="status" class="form-select form-select-sm">
                         <option value="">Tudo</option>
-                        <option value="owned" <%= query.status == 'owned' ? 'selected' : '' %>>Tenho</option>
-                        <option value="wanted" <%= query.status == 'wanted' ? 'selected' : '' %>>Quero</option>
+                        <option value="owned" <%= query.status == 'owned' ? 'selected' : '' %>>Tenho (Coleção)</option>
+                        <option value="wanted" <%= query.status == 'wanted' ? 'selected' : '' %>>Quero (Wishlist)</option>
                     </select>
                 </div>
+
                 <div class="mb-3">
                     <label class="small fw-bold">Pesquisa</label>
-                    <input type="text" name="search" class="form-control form-control-sm" value="<%= query.search || '' %>">
+                    <input type="text" name="search" class="form-control form-control-sm" value="<%= query.search || '' %>" placeholder="Nome ou Nº...">
                 </div>
+
                 <div class="mb-3">
                     <label class="small fw-bold">Ano</label>
                     <select name="year" class="form-select form-select-sm">
@@ -89,15 +105,17 @@
                         <% }) %>
                     </select>
                 </div>
+
                 <div class="mb-3">
                     <label class="small fw-bold">Temas</label>
-                    <input type="text" id="themeSearchInput" class="form-control form-control-sm mb-2" placeholder="Filtrar...">
+                    <input type="text" id="themeSearchInput" class="form-control form-control-sm mb-2" placeholder="Filtrar temas..." autocomplete="off">
+                    
                     <div class="sidebar-scroll border rounded p-2 bg-body-tertiary" id="themeListContainer">
                         <% allThemes.forEach(t => { %>
                             <div class="form-check mb-1 theme-item">
                                 <input class="form-check-input" type="checkbox" name="themes" value="<%= t.name %>" id="t-<%= t.name %>"
                                 <% if (query.themes && (query.themes === t.name || (Array.isArray(query.themes) && query.themes.includes(t.name)))) { %> checked <% } %>>
-                                <label class="form-check-label small lh-sm" for="t-<%= t.name %>">
+                                <label class="form-check-label small lh-sm" for="t-<%= t.name %>" style="cursor: pointer;">
                                     <span class="d-block text-truncate label-text" style="max-width: 180px;"><%= t.name %></span>
                                 </label>
                             </div>
@@ -107,23 +125,24 @@
                 
                 <input type="hidden" name="limit" id="limitInput" value="<%= pagination.limit %>">
                 <input type="hidden" name="page" value="<%= pagination.page %>">
-                
                 <input type="hidden" name="sort" id="sortInput" value="<%= query.sort || '' %>">
             </form>
         </div>
 
         <div class="col-md-9 col-lg-10">
             <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-                <span class="text-muted small"><%= pagination.totalItems %> sets</span>
+                <span class="text-muted small">
+                    <%= pagination.totalItems %> sets encontrados
+                </span>
                 
-                <div class="d-flex gap-2">
+                <div class="d-flex gap-2 align-items-center">
                     <select class="form-select form-select-sm" style="width: auto;" onchange="changeSort(this.value)">
-                        <option value="" <%= !query.sort ? 'selected' : '' %>>Padrão (Temas)</option>
-                        <option value="year_desc" <%= query.sort == 'year_desc' ? 'selected' : '' %>>Ano (Recente)</option>
-                        <option value="year_asc" <%= query.sort == 'year_asc' ? 'selected' : '' %>>Ano (Antigo)</option>
+                        <option value="" <%= !query.sort ? 'selected' : '' %>>Padrão (Por Tema)</option>
+                        <option value="year_desc" <%= query.sort == 'year_desc' ? 'selected' : '' %>>Ano (Mais Recente)</option>
+                        <option value="year_asc" <%= query.sort == 'year_asc' ? 'selected' : '' %>>Ano (Mais Antigo)</option>
                         <option value="parts_desc" <%= query.sort == 'parts_desc' ? 'selected' : '' %>>Peças (Maior)</option>
                         <option value="name_asc" <%= query.sort == 'name_asc' ? 'selected' : '' %>>Nome (A-Z)</option>
-                        <option value="added_desc" <%= query.sort == 'added_desc' ? 'selected' : '' %>>Data Adição</option>
+                        <option value="added_desc" <%= query.sort == 'added_desc' ? 'selected' : '' %>>Adicionado Recentemente</option>
                     </select>
 
                     <select class="form-select form-select-sm" style="width: 80px;" onchange="changeLimit(this.value)">
@@ -134,11 +153,13 @@
                 </div>
             </div>
 
-            <% let lastTheme = null; if (sets.length === 0) { %><div class="text-center py-5 text-muted"><h3>👻</h3><p>Nada.</p></div><% } %>
+            <% let lastTheme = null; if (sets.length === 0) { %>
+                <div class="text-center py-5 text-muted"><h3>👻</h3><p>Nada encontrado.</p></div>
+            <% } %>
 
             <div class="accordion" id="accordionThemes">
             <% sets.forEach((set, index) => { 
-                // Apenas agrupamos por temas se a ordenação for a Padrão (vazia)
+                // Lógica de agrupamento: Só agrupa por tema se NÃO houver ordenação personalizada
                 let showHeader = (!query.sort) && (set.theme_name !== lastTheme);
                 
                 if (showHeader) { 
@@ -148,63 +169,98 @@
                 %>
                 <div class="accordion-item border mb-3 shadow-sm overflow-hidden">
                     <h2 class="accordion-header">
-                        <button class="accordion-button fw-bold" type="button" data-bs-toggle="collapse" data-bs-target="#<%= themeId %>"><%= set.theme_name %></button>
+                        <button class="accordion-button fw-bold" type="button" data-bs-toggle="collapse" data-bs-target="#<%= themeId %>">
+                            <%= set.theme_name %>
+                        </button>
                     </h2>
                     <div id="<%= themeId %>" class="accordion-collapse collapse show">
                         <div class="accordion-body p-3">
                             <div class="row row-cols-2 row-cols-md-3 row-cols-xl-5 g-3">
                 <% } else if (index === 0 && query.sort) { %>
-                     <div class="border rounded p-3 mb-3 bg-body"><div class="row row-cols-2 row-cols-md-3 row-cols-xl-5 g-3">
+                     <div class="border rounded p-3 mb-3 bg-body">
+                        <div class="row row-cols-2 row-cols-md-3 row-cols-xl-5 g-3">
                 <% } %>
                 
                 <div class="col">
                     <div class="card h-100 set-card <%= set.user_status === 'OWNED' ? 'is-owned' : (set.user_status === 'WANTED' ? 'is-wanted' : '') %>" id="card-<%= set.set_num %>">
+                        
                         <img src="<%= set.img_url || 'https://via.placeholder.com/150' %>" class="card-img-top" loading="lazy">
                         
-                        <% if (set.user_status === 'OWNED') { %><span class="badge bg-success badge-owned">TENHO</span><% } %>
-                        <% if (set.user_status === 'WANTED') { %><span class="badge bg-danger badge-owned">QUERO</span><% } %>
+                        <% if (set.user_status === 'OWNED') { %>
+                            <span class="badge bg-success badge-owned">TENHO</span>
+                        <% } %>
+                        <% if (set.user_status === 'WANTED') { %>
+                            <span class="badge bg-danger badge-owned">QUERO</span>
+                        <% } %>
 
                         <div class="card-body p-2 d-flex flex-column text-center">
                             <h6 class="card-title text-truncate small mb-1" title="<%= set.name %>"><%= set.name %></h6>
+                            
                             <div class="small text-muted mb-2" style="font-size: 0.75rem;">
                                 <span class="fw-bold text-primary">#<%= set.set_num %></span> • <%= set.year %> • <%= set.num_parts %> pçs
-                                <% if (query.sort) { %><br><span class="badge bg-light text-dark border"><%= set.theme_name %></span><% } %>
+                                <% if (query.sort) { %>
+                                    <br><span class="badge bg-light text-dark border mt-1"><%= set.theme_name %></span>
+                                <% } %>
                             </div>
+
                             <div class="mt-auto card-actions d-flex justify-content-center gap-2">
-                                <a href="/set/<%= set.set_num %>" class="btn btn-outline-secondary" title="Ver Detalhes"><i class="bi bi-eye"></i></a>
+                                <a href="/set/<%= set.set_num %>" class="btn btn-outline-secondary" title="Ver Detalhes">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                                
                                 <% if (user) { %>
-                                    <button class="btn <%= set.user_status === 'WANTED' ? 'btn-danger' : 'btn-outline-danger' %>" onclick="toggleStatus('<%= set.set_num %>', 'WANTED')"><i class="bi <%= set.user_status === 'WANTED' ? 'bi-heart-fill' : 'bi-heart' %>"></i></button>
-                                    <button class="btn <%= set.user_status === 'OWNED' ? 'btn-success' : 'btn-outline-success' %>" onclick="toggleStatus('<%= set.set_num %>', 'OWNED')"><i class="bi <%= set.user_status === 'OWNED' ? 'bi-check-lg' : 'bi-plus-lg' %>"></i></button>
+                                    <button class="btn <%= set.user_status === 'WANTED' ? 'btn-danger' : 'btn-outline-danger' %>" 
+                                            onclick="toggleStatus('<%= set.set_num %>', 'WANTED')" title="Lista de Desejos">
+                                        <i class="bi <%= set.user_status === 'WANTED' ? 'bi-heart-fill' : 'bi-heart' %>"></i>
+                                    </button>
+                                    
+                                    <button class="btn <%= set.user_status === 'OWNED' ? 'btn-success' : 'btn-outline-success' %>" 
+                                            onclick="toggleStatus('<%= set.set_num %>', 'OWNED')" title="Minha Coleção">
+                                        <i class="bi <%= set.user_status === 'OWNED' ? 'bi-check-lg' : 'bi-plus-lg' %>"></i>
+                                    </button>
                                 <% } %>
                             </div>
                         </div>
                     </div>
                 </div>
             <% }); %>
-            <% if (sets.length > 0) { %> </div></div> <% if(!query.sort) { %> </div></div> <% } else { %> </div> <% } } %>
+            
+            <% if (sets.length > 0) { %> 
+                </div></div> 
+                <% if(!query.sort) { %> </div></div> <% } else { %> </div> <% } %>
+            <% } %>
             </div>
             
             <% if (pagination.totalPages > 1) { %>
                 <nav class="mt-4 pb-5 d-flex justify-content-center">
                     <ul class="pagination shadow-sm">
-                        <li class="page-item <%= pagination.page == 1 ? 'disabled' : '' %>"><button class="page-link" onclick="changePage(<%= pagination.page - 1 %>)">&laquo;</button></li>
+                        <li class="page-item <%= pagination.page == 1 ? 'disabled' : '' %>">
+                            <button class="page-link" onclick="changePage(<%= pagination.page - 1 %>)">&laquo;</button>
+                        </li>
+
                         <li class="page-item d-flex align-items-center border-top border-bottom bg-body px-2">
-                            <select class="form-select form-select-sm pagination-select" onchange="changePage(this.value)">
+                            <select class="form-select form-select-sm pagination-select" style="width: auto;" onchange="changePage(this.value)">
                                 <% for(let i = 1; i <= pagination.totalPages; i++) { %>
                                     <option value="<%= i %>" <%= pagination.page == i ? 'selected' : '' %>><%= i %></option>
                                 <% } %>
                             </select>
+                            <span class="small text-muted ms-2">de <%= pagination.totalPages %></span>
                         </li>
-                        <li class="page-item <%= pagination.page >= pagination.totalPages ? 'disabled' : '' %>"><button class="page-link" onclick="changePage(<%= pagination.page + 1 %>)">&raquo;</button></li>
+
+                        <li class="page-item <%= pagination.page >= pagination.totalPages ? 'disabled' : '' %>">
+                            <button class="page-link" onclick="changePage(<%= pagination.page + 1 %>)">&raquo;</button>
+                        </li>
                     </ul>
                 </nav>
             <% } %>
+
         </div>
     </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
+    // Filtro de pesquisa de Temas na Sidebar
     document.getElementById('themeSearchInput').addEventListener('keyup', function(e) {
         const term = e.target.value.toLowerCase();
         document.querySelectorAll('.theme-item').forEach(item => {
@@ -213,25 +269,68 @@
         });
     });
 
-    function changeLimit(val) { document.getElementById('limitInput').value = val; savePref('items_per_page', val); submitPage(1); }
-    function changeSort(val) { document.getElementById('sortInput').value = val; submitPage(1); } // Nova função de sort
-    function changePage(p) { if(p>0) submitPage(p); }
-    function submitPage(p) { document.querySelector('input[name="page"]').value = p; document.getElementById('filterForm').submit(); }
+    // Funções de Navegação e Filtros
+    function changeLimit(val) { 
+        document.getElementById('limitInput').value = val; 
+        savePref('items_per_page', val); 
+        submitPage(1); 
+    }
     
+    function changeSort(val) { 
+        document.getElementById('sortInput').value = val; 
+        submitPage(1); 
+    }
+    
+    function changePage(p) { 
+        if(p > 0) submitPage(p); 
+    }
+    
+    function submitPage(p) { 
+        document.querySelector('input[name="page"]').value = p; 
+        document.getElementById('filterForm').submit(); 
+    }
+    
+    // Dark Mode Toggle
     document.getElementById('darkModeSwitch')?.addEventListener('change', (e) => {
-        document.documentElement.setAttribute('data-bs-theme', e.target.checked ? 'dark' : 'light'); savePref('dark_mode', e.target.checked);
+        document.documentElement.setAttribute('data-bs-theme', e.target.checked ? 'dark' : 'light'); 
+        savePref('dark_mode', e.target.checked);
     });
-    async function savePref(k, v) { try{ fetch('/api/preferences', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({[k]:v})}); }catch(e){} }
 
+    // Guardar Preferências
+    async function savePref(k, v) { 
+        try { 
+            fetch('/api/preferences', {
+                method: 'POST',
+                headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({[k]: v})
+            }); 
+        } catch(e) {} 
+    }
+
+    // Toggle Estado (Owned/Wanted)
     async function toggleStatus(setNum, targetStatus) {
         const card = document.getElementById('card-' + setNum);
+        // Verifica o estado atual baseado na classe CSS
         const currentStatus = card.classList.contains('is-owned') ? 'OWNED' : (card.classList.contains('is-wanted') ? 'WANTED' : null);
+        
         let newStatus = targetStatus;
+        // Se clicar no mesmo botão que o estado atual, removemos o item
         if (currentStatus === targetStatus) newStatus = 'REMOVE';
+
         try {
-            const res = await fetch('/api/toggle', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({set_num: setNum, status: newStatus})});
-            if (res.ok) window.location.reload();
-        } catch(e) { alert('Erro'); }
+            const res = await fetch('/api/toggle', { 
+                method: 'POST', 
+                headers: {'Content-Type':'application/json'}, 
+                body: JSON.stringify({set_num: setNum, status: newStatus})
+            });
+            
+            if (res.ok) {
+                // Recarrega a página para atualizar os ícones e contadores corretamente
+                window.location.reload();
+            }
+        } catch(e) { 
+            alert('Erro de comunicação com o servidor'); 
+        }
     }
 </script>
 </body>
