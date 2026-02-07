@@ -1,239 +1,58 @@
 <!DOCTYPE html>
-<html lang="pt" data-bs-theme="<%= (user && user.dark_mode) ? 'dark' : 'light' %>">
+<html lang="pt" data-bs-theme="<%= user.dark_mode ? 'dark' : 'light' %>">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><%= set.name %> - Detalhes</title>
+    <title><%= set.name %></title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
 </head>
-<body class="bg-body-tertiary">
-
-<nav class="navbar navbar-expand-lg border-bottom mb-4 shadow-sm sticky-top bg-body">
-    <div class="container-fluid px-3 px-lg-4">
-        <a class="navbar-brand fw-bold text-primary" href="/">🧱 LegoTracker</a>
-        
-        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-            <span class="navbar-toggler-icon"></span>
-        </button>
-
-        <div class="collapse navbar-collapse" id="navbarNav">
-            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-                <% if (user) { %>
-                    <li class="nav-item"><a class="nav-link" href="/dashboard"><i class="bi bi-speedometer2"></i> Dashboard</a></li>
-                    <li class="nav-item"><a class="nav-link" href="/?status=owned"><i class="bi bi-box-seam"></i> Minha Coleção</a></li>
-                    <li class="nav-item"><a class="nav-link" href="/?status=wanted"><i class="bi bi-heart"></i> Wishlist</a></li>
-                <% } %>
-            </ul>
-
-            <div class="d-flex align-items-center gap-3">
-                <a href="/" class="btn btn-outline-secondary rounded-pill btn-sm px-3"><i class="bi bi-arrow-left"></i> Voltar</a>
-                
-                <% if (user) { %>
-                <div class="dropdown">
-                    <button class="btn btn-outline-dark border-0 rounded-circle" type="button" data-bs-toggle="dropdown">
-                        <i class="bi bi-person-circle fs-5"></i>
-                    </button>
-                    <ul class="dropdown-menu dropdown-menu-end shadow">
-                        <li><h6 class="dropdown-header">Opções</h6></li>
-                        <% if (user.id === 1) { %>
-                            <li><a class="dropdown-item" href="/admin/sets">Gerir Sets</a></li>
-                            <li><a class="dropdown-item" href="/admin/themes">Gerir Temas</a></li>
-                            <li><a class="dropdown-item" href="/admin/users">Gerir Utilizadores</a></li>
-                            <li><hr class="dropdown-divider"></li>
-                        <% } %>
-                        <li class="px-3 py-1">
-                            <div class="form-check form-switch">
-                                <input class="form-check-input" type="checkbox" id="darkModeSwitch" <%= user.dark_mode ? 'checked' : '' %>>
-                                <label class="form-check-label small" for="darkModeSwitch">Modo Escuro</label>
-                            </div>
-                        </li>
-                        <li><a class="dropdown-item text-danger" href="/logout">Sair</a></li>
-                    </ul>
-                </div>
-                <% } %>
-            </div>
-        </div>
-    </div>
+<body>
+<nav class="navbar border-bottom mb-4 bg-body">
+    <div class="container-fluid"><a class="navbar-brand fw-bold" href="/">🧱 LegoTracker</a><a href="/" class="btn btn-outline-secondary btn-sm">Voltar</a></div>
 </nav>
 
-<div class="container py-2 py-md-4">
+<div class="container pb-5">
     <div class="row g-4">
-        <div class="col-lg-6">
-            <div class="card shadow-sm border-0 position-sticky" style="top: 80px;">
-                <div class="card-body p-4 text-center bg-body">
-                    <% if (set.user_status === 'OWNED') { %>
-                        <div class="position-absolute top-0 start-0 m-3 badge bg-success fs-6 shadow-sm"><i class="bi bi-check-lg"></i> Na Coleção</div>
-                    <% } else if (set.user_status === 'WANTED') { %>
-                        <div class="position-absolute top-0 start-0 m-3 badge bg-danger fs-6 shadow-sm"><i class="bi bi-heart-fill"></i> Na Wishlist</div>
-                    <% } %>
-
-                    <img src="<%= set.img_url %>" class="img-fluid rounded" style="max-height: 500px; object-fit: contain;" alt="<%= set.name %>">
-                </div>
-            </div>
+        <div class="col-lg-6 text-center">
+            <img src="<%= set.img_url %>" class="img-fluid rounded shadow-sm bg-white p-3" style="max-height: 450px;">
         </div>
-
         <div class="col-lg-6">
-            <div class="mb-4">
-                <div class="d-flex flex-wrap gap-2 mb-2 align-items-center">
-                    <span class="badge bg-primary fs-6">#<%= set.set_num %></span>
-                    <span class="badge bg-secondary fs-6"><%= set.year %></span>
-                    <a href="/?themes=<%= encodeURIComponent(set.theme_name) %>" class="badge bg-info text-dark text-decoration-none fs-6"><%= set.theme_name %></a>
-                </div>
-                <h1 class="fw-bold display-6 lh-sm mb-3"><%= set.name %></h1>
-                
-                <div class="row row-cols-2 g-3 mb-4">
-                    <div class="col">
-                        <div class="p-3 border rounded bg-body shadow-sm h-100">
-                            <small class="text-muted d-block text-uppercase fw-bold" style="font-size: 0.7rem;">Peças</small>
-                            <span class="fs-4 fw-bold"><i class="bi bi-puzzle me-2 text-warning"></i><%= set.num_parts %></span>
-                        </div>
-                    </div>
-                    <div class="col">
-                        <div class="p-3 border rounded bg-body shadow-sm h-100">
-                            <small class="text-muted d-block text-uppercase fw-bold" style="font-size: 0.7rem;">PVP (Estimado)</small>
-                            <span class="fs-4 fw-bold text-success"><%= set.price_eur ? set.price_eur + '€' : '--' %></span>
-                        </div>
-                    </div>
-                </div>
+            <h1 class="fw-bold"><%= set.name %></h1>
+            <p class="text-muted">Set #<%= set.set_num %> · <%= set.year %> · <%= set.theme_name %></p>
+            
+            <div class="row g-2 mb-4 text-center">
+                <div class="col"><div class="p-3 border rounded"><strong>Peças:</strong><br><%= set.num_parts %></div></div>
+                <div class="col"><div class="p-3 border rounded text-success"><strong>Valor RRP:</strong><br><%= set.price_eur %>€</div></div>
             </div>
 
             <% if (user) { %>
-            <div class="card shadow border-0 mb-4">
-                <div class="card-header bg-primary text-white py-3">
-                    <h5 class="mb-0"><i class="bi bi-collection-fill me-2"></i> Gestão de Coleção</h5>
-                </div>
-                <div class="card-body p-4">
-                    <div class="d-flex gap-3 mb-4">
-                        <button onclick="toggleStatus('OWNED')" class="btn btn-lg flex-fill py-3 shadow-sm transition-all <%= set.user_status === 'OWNED' ? 'btn-success' : 'btn-outline-success' %>">
-                            <div class="d-flex flex-column align-items-center">
-                                <i class="bi bi-check-circle-fill fs-3 mb-1"></i>
-                                <span class="fw-bold">Tenho</span>
-                            </div>
-                        </button>
-                        <button onclick="toggleStatus('WANTED')" class="btn btn-lg flex-fill py-3 shadow-sm transition-all <%= set.user_status === 'WANTED' ? 'btn-danger' : 'btn-outline-danger' %>">
-                            <div class="d-flex flex-column align-items-center">
-                                <i class="bi bi-heart-fill fs-3 mb-1"></i>
-                                <span class="fw-bold">Quero</span>
-                            </div>
-                        </button>
+            <div class="card shadow-sm mb-4">
+                <div class="card-body">
+                    <div class="d-flex gap-2 mb-3">
+                        <button onclick="updateStatus('OWNED')" class="btn flex-fill <%= set.user_status==='OWNED'?'btn-success':'btn-outline-success' %>">Tenho</button>
+                        <button onclick="updateStatus('WANTED')" class="btn flex-fill <%= set.user_status==='WANTED'?'btn-danger':'btn-outline-danger' %>">Quero</button>
                     </div>
-
                     <% if (set.user_status === 'OWNED') { %>
-                        <div class="bg-body-tertiary p-3 rounded border">
-                            <h6 class="fw-bold text-muted mb-3 small text-uppercase">Detalhes da Cópia</h6>
-                            <form id="editForm">
-                                <div class="row g-3">
-                                    <div class="col-6">
-                                        <label class="form-label small fw-bold">Estado</label>
-                                        <select class="form-select" id="build">
-                                            <option value="Montado" <%= set.build_status === 'Montado' ? 'selected' : '' %>>Montado</option>
-                                            <option value="Desmontado" <%= set.build_status === 'Desmontado' ? 'selected' : '' %>>Desmontado</option>
-                                            <option value="Selado" <%= set.build_status === 'Selado' ? 'selected' : '' %>>Novo (Selado)</option>
-                                        </select>
-                                    </div>
-                                    <div class="col-6">
-                                        <label class="form-label small fw-bold">Localização</label>
-                                        <input type="text" class="form-control" id="loc" value="<%= set.location || '' %>" placeholder="Ex: Prateleira 1">
-                                    </div>
-                                    <div class="col-6">
-                                        <label class="form-label small fw-bold">Custo (€)</label>
-                                        <input type="number" step="0.01" class="form-control" id="price" value="<%= set.purchase_price || 0 %>">
-                                    </div>
-                                    <div class="col-12 pt-2">
-                                        <button type="button" class="btn btn-primary w-100 fw-bold" onclick="saveDetails()">
-                                            <i class="bi bi-save me-2"></i> Guardar Alterações
-                                        </button>
-                                    </div>
-                                </div>
-                            </form>
-                            <div class="text-center mt-3">
-                                <small class="text-muted" style="font-size: 0.75rem;">
-                                    Adicionado em: <%= set.date_added ? new Date(set.date_added).toLocaleDateString('pt-PT') : 'Data desconhecida' %>
-                                </small>
-                            </div>
-                        </div>
+                        <form id="detailsForm" class="row g-2 small">
+                            <div class="col-6"><label class="fw-bold">Estado</label><select class="form-select form-select-sm" id="build_status"><option value="Montado" <%=set.build_status==='Montado'?'selected':''%>>Montado</option><option value="Desmontado" <%=set.build_status==='Desmontado'?'selected':''%>>Desmontado</option></select></div>
+                            <div class="col-6"><label class="fw-bold">Local</label><input type="text" class="form-control form-control-sm" id="location" value="<%= set.location %>"></div>
+                            <div class="col-12"><button type="button" onclick="saveDetails()" class="btn btn-primary btn-sm w-100 mt-2">Guardar</button></div>
+                        </form>
                     <% } %>
                 </div>
             </div>
             <% } %>
-
-            <div class="d-grid gap-2">
-                <a href="<%= set.rb_url %>" target="_blank" class="btn btn-outline-secondary">
-                    <i class="bi bi-box-arrow-up-right me-2"></i> Ver no Rebrickable
-                </a>
-                <a href="https://brickset.com/sets/<%= set.set_num %>" target="_blank" class="btn btn-outline-secondary">
-                    <i class="bi bi-box-arrow-up-right me-2"></i> Ver no Brickset
-                </a>
-            </div>
+            <a href="<%= set.rb_url %>" target="_blank" class="btn btn-outline-primary w-100">Ver no Rebrickable</a>
         </div>
     </div>
 </div>
-
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-    const setNum = "<%= set.set_num %>";
-
-    const themeSwitch = document.getElementById('darkModeSwitch');
-    if (themeSwitch) {
-        themeSwitch.addEventListener('change', function() {
-            const isDark = this.checked;
-            document.documentElement.setAttribute('data-bs-theme', isDark ? 'dark' : 'light');
-            fetch('/api/preferences', {
-                method: 'POST', headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ dark_mode: isDark })
-            }).catch(console.error);
-        });
-    }
-
-    async function toggleStatus(status) {
-        let newStatus = status;
-        if ("<%= set.user_status %>" === status) newStatus = 'REMOVE';
-        try {
-            await fetch('/api/toggle', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ set_num: setNum, status: newStatus })
-            });
-            window.location.reload();
-        } catch(e) { alert('Erro ao atualizar status.'); }
-    }
-
+    async function updateStatus(s) { await fetch('/api/toggle', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ set_num: '<%= set.set_num %>', status: s })}); window.location.reload(); }
     async function saveDetails() {
-        const btn = document.querySelector('#editForm button');
-        const originalText = btn.innerHTML;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> A guardar...';
-        btn.disabled = true;
-
-        const body = {
-            set_num: setNum,
-            build_status: document.getElementById('build').value,
-            location: document.getElementById('loc').value,
-            purchase_price: document.getElementById('price').value
-        };
-
-        try {
-            const res = await fetch('/api/user_set/update', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify(body)
-            });
-            if (res.ok) {
-                btn.innerHTML = '<i class="bi bi-check-lg"></i> Guardado!';
-                btn.classList.remove('btn-primary');
-                btn.classList.add('btn-success');
-                setTimeout(() => {
-                    btn.innerHTML = originalText;
-                    btn.disabled = false;
-                    btn.classList.remove('btn-success');
-                    btn.classList.add('btn-primary');
-                }, 2000);
-            }
-        } catch(e) { 
-            alert('Erro ao guardar.');
-            btn.innerHTML = originalText;
-            btn.disabled = false;
-        }
+        const body = { set_num: '<%= set.set_num %>', build_status: document.getElementById('build_status').value, location: document.getElementById('location').value, purchase_price: 0 };
+        await fetch('/api/user_set/update', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body)});
+        alert("Guardado!");
     }
 </script>
 </body>
