@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LegoTracker V7</title>
+    <title>LegoTracker V8</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
     <style>
@@ -12,7 +12,6 @@
         .set-card:hover img { transform: scale(1.05); }
         [data-bs-theme="dark"] .card { background-color: #2b3035; border-color: #495057; }
         
-        /* Estilos de Estado */
         [data-bs-theme="dark"] .is-owned { background-color: #1a4d2e !important; border-color: #2ea043; }
         [data-bs-theme="light"] .is-owned { border: 2px solid #198754; background-color: #f0fff4; }
         
@@ -23,7 +22,6 @@
         .sidebar-scroll { max-height: 60vh; overflow-y: auto; }
         .pagination-select { border: none; background-color: transparent; font-weight: bold; text-align: center; cursor: pointer; }
         [data-bs-theme="dark"] .pagination-select { color: white; background-color: #212529; }
-        
         .card-actions .btn { border-radius: 50%; width: 32px; height: 32px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
     </style>
 </head>
@@ -106,27 +104,44 @@
                         <% }) %>
                     </div>
                 </div>
+                
                 <input type="hidden" name="limit" id="limitInput" value="<%= pagination.limit %>">
                 <input type="hidden" name="page" value="<%= pagination.page %>">
+                
+                <input type="hidden" name="sort" id="sortInput" value="<%= query.sort || '' %>">
             </form>
         </div>
 
         <div class="col-md-9 col-lg-10">
-            <div class="d-flex justify-content-between align-items-center mb-3">
+            <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
                 <span class="text-muted small"><%= pagination.totalItems %> sets</span>
-                <select class="form-select form-select-sm" style="width: 80px;" onchange="changeLimit(this.value)">
-                    <option value="25" <%= pagination.limit == 25 ? 'selected' : '' %>>25</option>
-                    <option value="50" <%= pagination.limit == 50 ? 'selected' : '' %>>50</option>
-                    <option value="100" <%= pagination.limit == 100 ? 'selected' : '' %>>100</option>
-                    <option value="all" <%= pagination.limit > 1000 ? 'selected' : '' %>>Tds</option>
-                </select>
+                
+                <div class="d-flex gap-2">
+                    <select class="form-select form-select-sm" style="width: auto;" onchange="changeSort(this.value)">
+                        <option value="" <%= !query.sort ? 'selected' : '' %>>Padrão (Temas)</option>
+                        <option value="year_desc" <%= query.sort == 'year_desc' ? 'selected' : '' %>>Ano (Recente)</option>
+                        <option value="year_asc" <%= query.sort == 'year_asc' ? 'selected' : '' %>>Ano (Antigo)</option>
+                        <option value="parts_desc" <%= query.sort == 'parts_desc' ? 'selected' : '' %>>Peças (Maior)</option>
+                        <option value="name_asc" <%= query.sort == 'name_asc' ? 'selected' : '' %>>Nome (A-Z)</option>
+                        <option value="added_desc" <%= query.sort == 'added_desc' ? 'selected' : '' %>>Data Adição</option>
+                    </select>
+
+                    <select class="form-select form-select-sm" style="width: 80px;" onchange="changeLimit(this.value)">
+                        <option value="25" <%= pagination.limit == 25 ? 'selected' : '' %>>25</option>
+                        <option value="50" <%= pagination.limit == 50 ? 'selected' : '' %>>50</option>
+                        <option value="100" <%= pagination.limit == 100 ? 'selected' : '' %>>100</option>
+                    </select>
+                </div>
             </div>
 
             <% let lastTheme = null; if (sets.length === 0) { %><div class="text-center py-5 text-muted"><h3>👻</h3><p>Nada.</p></div><% } %>
 
             <div class="accordion" id="accordionThemes">
             <% sets.forEach((set, index) => { 
-                if (set.theme_name !== lastTheme) { 
+                // Apenas agrupamos por temas se a ordenação for a Padrão (vazia)
+                let showHeader = (!query.sort) && (set.theme_name !== lastTheme);
+                
+                if (showHeader) { 
                     if (lastTheme !== null) { %> </div></div></div> <% } 
                     lastTheme = set.theme_name; 
                     let themeId = 'theme-' + index; 
@@ -138,7 +153,10 @@
                     <div id="<%= themeId %>" class="accordion-collapse collapse show">
                         <div class="accordion-body p-3">
                             <div class="row row-cols-2 row-cols-md-3 row-cols-xl-5 g-3">
+                <% } else if (index === 0 && query.sort) { %>
+                     <div class="border rounded p-3 mb-3 bg-body"><div class="row row-cols-2 row-cols-md-3 row-cols-xl-5 g-3">
                 <% } %>
+                
                 <div class="col">
                     <div class="card h-100 set-card <%= set.user_status === 'OWNED' ? 'is-owned' : (set.user_status === 'WANTED' ? 'is-wanted' : '') %>" id="card-<%= set.set_num %>">
                         <img src="<%= set.img_url || 'https://via.placeholder.com/150' %>" class="card-img-top" loading="lazy">
@@ -150,27 +168,20 @@
                             <h6 class="card-title text-truncate small mb-1" title="<%= set.name %>"><%= set.name %></h6>
                             <div class="small text-muted mb-2" style="font-size: 0.75rem;">
                                 <span class="fw-bold text-primary">#<%= set.set_num %></span> • <%= set.year %> • <%= set.num_parts %> pçs
+                                <% if (query.sort) { %><br><span class="badge bg-light text-dark border"><%= set.theme_name %></span><% } %>
                             </div>
                             <div class="mt-auto card-actions d-flex justify-content-center gap-2">
                                 <a href="/set/<%= set.set_num %>" class="btn btn-outline-secondary" title="Ver Detalhes"><i class="bi bi-eye"></i></a>
-                                
                                 <% if (user) { %>
-                                    <button class="btn <%= set.user_status === 'WANTED' ? 'btn-danger' : 'btn-outline-danger' %>" 
-                                            onclick="toggleStatus('<%= set.set_num %>', 'WANTED')" title="Lista de Desejos">
-                                        <i class="bi <%= set.user_status === 'WANTED' ? 'bi-heart-fill' : 'bi-heart' %>"></i>
-                                    </button>
-                                    
-                                    <button class="btn <%= set.user_status === 'OWNED' ? 'btn-success' : 'btn-outline-success' %>" 
-                                            onclick="toggleStatus('<%= set.set_num %>', 'OWNED')" title="Minha Coleção">
-                                        <i class="bi <%= set.user_status === 'OWNED' ? 'bi-check-lg' : 'bi-plus-lg' %>"></i>
-                                    </button>
+                                    <button class="btn <%= set.user_status === 'WANTED' ? 'btn-danger' : 'btn-outline-danger' %>" onclick="toggleStatus('<%= set.set_num %>', 'WANTED')"><i class="bi <%= set.user_status === 'WANTED' ? 'bi-heart-fill' : 'bi-heart' %>"></i></button>
+                                    <button class="btn <%= set.user_status === 'OWNED' ? 'btn-success' : 'btn-outline-success' %>" onclick="toggleStatus('<%= set.set_num %>', 'OWNED')"><i class="bi <%= set.user_status === 'OWNED' ? 'bi-check-lg' : 'bi-plus-lg' %>"></i></button>
                                 <% } %>
                             </div>
                         </div>
                     </div>
                 </div>
             <% }); %>
-            <% if (sets.length > 0) { %> </div></div></div></div> <% } %>
+            <% if (sets.length > 0) { %> </div></div> <% if(!query.sort) { %> </div></div> <% } else { %> </div> <% } } %>
             </div>
             
             <% if (pagination.totalPages > 1) { %>
@@ -203,6 +214,7 @@
     });
 
     function changeLimit(val) { document.getElementById('limitInput').value = val; savePref('items_per_page', val); submitPage(1); }
+    function changeSort(val) { document.getElementById('sortInput').value = val; submitPage(1); } // Nova função de sort
     function changePage(p) { if(p>0) submitPage(p); }
     function submitPage(p) { document.querySelector('input[name="page"]').value = p; document.getElementById('filterForm').submit(); }
     
@@ -212,16 +224,13 @@
     async function savePref(k, v) { try{ fetch('/api/preferences', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({[k]:v})}); }catch(e){} }
 
     async function toggleStatus(setNum, targetStatus) {
-        // Se clicar em Owned e já for Owned, ou Wanted e já for Wanted -> Remove
         const card = document.getElementById('card-' + setNum);
         const currentStatus = card.classList.contains('is-owned') ? 'OWNED' : (card.classList.contains('is-wanted') ? 'WANTED' : null);
-        
         let newStatus = targetStatus;
         if (currentStatus === targetStatus) newStatus = 'REMOVE';
-
         try {
             const res = await fetch('/api/toggle', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({set_num: setNum, status: newStatus})});
-            if (res.ok) window.location.reload(); // Refresh para atualizar ícones corretamente
+            if (res.ok) window.location.reload();
         } catch(e) { alert('Erro'); }
     }
 </script>
