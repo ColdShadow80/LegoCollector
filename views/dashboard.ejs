@@ -6,89 +6,60 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-        .stats-card { transition: transform 0.2s; }
-        .stats-card:hover { transform: translateY(-5px); }
-    </style>
 </head>
-<body class="bg-body-tertiary">
+<body>
 
 <nav class="navbar navbar-expand-lg border-bottom mb-4 bg-body">
     <div class="container-fluid px-4">
         <a class="navbar-brand fw-bold" href="/">🧱 LegoTracker</a>
-        <div class="d-flex gap-3">
-            <a href="/" class="btn btn-outline-secondary btn-sm">Minha Coleção</a>
-            <span class="navbar-text small">Bem-vindo, <%= user.name %></span>
-        </div>
+        <a href="/" class="btn btn-outline-secondary btn-sm">Voltar</a>
     </div>
 </nav>
 
-<div class="container pb-5">
-    <h3 class="mb-4 fw-bold"><i class="bi bi-speedometer2"></i> Dashboard da Coleção</h3>
+<div class="container py-4">
+    <h2 class="mb-4 fw-bold">📊 Estatísticas da Coleção</h2>
 
-    <div class="row g-3 mb-4">
-        <div class="col-md-3">
-            <div class="card shadow-sm border-0 stats-card border-start border-4 border-primary">
-                <div class="card-body">
-                    <h6 class="text-muted small text-uppercase fw-bold">Dimensão</h6>
-                    <h3 class="fw-bold text-primary mb-0"><%= stats.total_sets %> Sets</h3>
-                    <small class="text-muted"><%= stats.total_parts ? stats.total_parts.toLocaleString('pt-PT') : 0 %> peças</small>
-                </div>
+    <div class="row row-cols-2 row-cols-md-4 g-3 mb-5">
+        <div class="col">
+            <div class="card shadow-sm text-center p-3 h-100 border-primary border-top-0 border-end-0 border-bottom-0 border-4">
+                <div class="fs-1 fw-bold text-primary"><%= stats.total_items || 0 %></div>
+                <div class="text-muted small">Total de Sets</div>
             </div>
         </div>
-        
-        <div class="col-md-3">
-            <div class="card shadow-sm border-0 stats-card border-start border-4 border-warning">
-                <div class="card-body">
-                    <h6 class="text-muted small text-uppercase fw-bold">Investimento (Gasto)</h6>
-                    <h3 class="fw-bold text-warning">€ <%= stats.total_spent ? stats.total_spent.toLocaleString('pt-PT', {minimumFractionDigits: 2}) : '0,00' %></h3>
-                    <small class="text-muted">Valor pago real</small>
-                </div>
+        <div class="col">
+            <div class="card shadow-sm text-center p-3 h-100 border-warning border-top-0 border-end-0 border-bottom-0 border-4">
+                <div class="fs-1 fw-bold text-warning"><%= stats.total_parts ? stats.total_parts.toLocaleString() : 0 %></div>
+                <div class="text-muted small">Total de Peças</div>
             </div>
         </div>
-
-        <div class="col-md-3">
-            <div class="card shadow-sm border-0 stats-card border-start border-4 border-success">
-                <div class="card-body">
-                    <h6 class="text-muted small text-uppercase fw-bold">Valor de Mercado (PVP)</h6>
-                    <h3 class="fw-bold text-success">€ <%= stats.total_value_rrp ? stats.total_value_rrp.toLocaleString('pt-PT', {minimumFractionDigits: 2}) : '0,00' %></h3>
-                    <% 
-                       let diff = (stats.total_value_rrp || 0) - (stats.total_spent || 0);
-                       let color = diff >= 0 ? 'text-success' : 'text-danger';
-                       let signal = diff >= 0 ? '+' : '';
-                    %>
-                    <small class="<%= color %> fw-bold"><%= signal %>€ <%= diff.toLocaleString('pt-PT', {minimumFractionDigits: 2}) %></small>
-                </div>
+        <div class="col">
+            <div class="card shadow-sm text-center p-3 h-100 border-success border-top-0 border-end-0 border-bottom-0 border-4">
+                <div class="fs-1 fw-bold text-success"><%= stats.total_value_rrp ? stats.total_value_rrp.toFixed(2) : '0.00' %>€</div>
+                <div class="text-muted small">Valor de Mercado (PVP)</div>
             </div>
         </div>
-
-        <div class="col-md-3">
-            <div class="card shadow-sm border-0 stats-card border-start border-4 border-danger">
-                <div class="card-body">
-                    <h6 class="text-muted small text-uppercase fw-bold">Lista de Desejos</h6>
-                    <h3 class="fw-bold text-danger"><%= wishlist.wanted_count %> Sets</h3>
-                    <small class="text-muted">PVP Est. € <%= wishlist.wanted_value ? wishlist.wanted_value.toLocaleString('pt-PT') : '0' %></small>
-                </div>
+        <div class="col">
+            <div class="card shadow-sm text-center p-3 h-100 border-danger border-top-0 border-end-0 border-bottom-0 border-4">
+                <div class="fs-1 fw-bold text-danger"><%= wishlist.wanted_count || 0 %></div>
+                <div class="text-muted small">Na Wishlist (<%= wishlist.wanted_value ? wishlist.wanted_value.toFixed(2) : 0 %>€)</div>
             </div>
         </div>
     </div>
 
     <div class="row g-4">
         <div class="col-md-6">
-            <div class="card shadow-sm border-0 h-100">
-                <div class="card-header bg-transparent fw-bold">Top 5 Temas</div>
-                <div class="card-body d-flex justify-content-center align-items-center">
-                    <div style="width: 300px; height: 300px;">
-                        <canvas id="chartThemes"></canvas>
-                    </div>
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-body fw-bold">Top 5 Temas</div>
+                <div class="card-body">
+                    <canvas id="themesChart"></canvas>
                 </div>
             </div>
         </div>
         <div class="col-md-6">
-            <div class="card shadow-sm border-0 h-100">
-                <div class="card-header bg-transparent fw-bold">Sets por Ano</div>
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-body fw-bold">Sets por Ano</div>
                 <div class="card-body">
-                    <canvas id="chartYears"></canvas>
+                    <canvas id="yearsChart"></canvas>
                 </div>
             </div>
         </div>
@@ -96,39 +67,36 @@
 </div>
 
 <script>
+    // DADOS VINDOS DO SERVIDOR
     const themesData = <%- JSON.stringify(themes) %>;
     const yearsData = <%- JSON.stringify(years) %>;
 
-    if(themesData.length > 0) {
-        new Chart(document.getElementById('chartThemes'), {
-            type: 'doughnut',
-            data: {
-                labels: themesData.map(t => t.name),
-                datasets: [{
-                    data: themesData.map(t => t.count),
-                    backgroundColor: ['#0d6efd', '#198754', '#ffc107', '#dc3545', '#6c757d'],
-                    borderWidth: 1
-                }]
-            },
-            options: { plugins: { legend: { position: 'bottom' } } }
-        });
-    }
+    // GRÁFICO DE TEMAS (Doughnut)
+    new Chart(document.getElementById('themesChart'), {
+        type: 'doughnut',
+        data: {
+            labels: themesData.map(t => t.name),
+            datasets: [{
+                data: themesData.map(t => t.count),
+                backgroundColor: ['#0d6efd', '#6610f2', '#6f42c1', '#d63384', '#dc3545']
+            }]
+        }
+    });
 
-    if(yearsData.length > 0) {
-        new Chart(document.getElementById('chartYears'), {
-            type: 'bar',
-            data: {
-                labels: yearsData.map(y => y.year),
-                datasets: [{
-                    label: 'Quantidade',
-                    data: yearsData.map(y => y.count),
-                    backgroundColor: '#0dcaf0',
-                    borderRadius: 4
-                }]
-            },
-            options: { scales: { y: { beginAtZero: true } }, plugins: { legend: { display: false } } }
-        });
-    }
+    // GRÁFICO DE ANOS (Bar)
+    new Chart(document.getElementById('yearsChart'), {
+        type: 'bar',
+        data: {
+            labels: yearsData.map(y => y.year),
+            datasets: [{
+                label: 'Sets',
+                data: yearsData.map(y => y.count),
+                backgroundColor: '#198754'
+            }]
+        },
+        options: { scales: { y: { beginAtZero: true } } }
+    });
 </script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
