@@ -17,10 +17,12 @@ const MIGRATIONS = [
     `ALTER TABLE themes ADD COLUMN is_hidden INTEGER DEFAULT 0; ALTER TABLE themes ADD COLUMN ignore_parts INTEGER DEFAULT 0; ALTER TABLE users ADD COLUMN last_login DATETIME;`,
     // V6
     `ALTER TABLE sets ADD COLUMN is_hidden INTEGER DEFAULT 0; ALTER TABLE sets ADD COLUMN ignore_parts INTEGER DEFAULT 0;`,
+    // V7
+    `ALTER TABLE user_sets ADD COLUMN status TEXT DEFAULT 'OWNED'; ALTER TABLE user_sets ADD COLUMN quantity INTEGER DEFAULT 1;`,
     
-    // V7: WISHLIST E QUANTIDADE (NOVO)
-    `ALTER TABLE user_sets ADD COLUMN status TEXT DEFAULT 'OWNED'; -- 'OWNED' ou 'WANTED'
-     ALTER TABLE user_sets ADD COLUMN quantity INTEGER DEFAULT 1;`
+    // V8: ESTADO DE CONSTRUÇÃO E LOCALIZAÇÃO (NOVO)
+    `ALTER TABLE user_sets ADD COLUMN build_status TEXT DEFAULT 'Montado'; -- Ex: Montado, Selado, Desmontado
+     ALTER TABLE user_sets ADD COLUMN location TEXT; -- Ex: Estante Sala, Caixa 3`
 ];
 
 function runMigrations() {
