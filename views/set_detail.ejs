@@ -9,36 +9,56 @@
 </head>
 <body class="bg-body-tertiary">
 
-<nav class="navbar navbar-expand-lg border-bottom mb-4 bg-body shadow-sm sticky-top">
+<nav class="navbar navbar-expand-lg border-bottom mb-4 shadow-sm sticky-top bg-body">
     <div class="container-fluid px-3 px-lg-4">
         <a class="navbar-brand fw-bold text-primary" href="/">🧱 LegoTracker</a>
-        <div class="d-flex align-items-center gap-3">
-            <a href="/" class="btn btn-outline-secondary rounded-pill px-3"><i class="bi bi-arrow-left"></i> Voltar</a>
-            
-            <% if (user) { %>
-            <div class="dropdown">
-                <button class="btn btn-outline-dark border-0 rounded-circle" type="button" data-bs-toggle="dropdown">
-                    <i class="bi bi-person-circle fs-5"></i>
-                </button>
-                <ul class="dropdown-menu dropdown-menu-end shadow">
-                    <li><h6 class="dropdown-header">Opções</h6></li>
-                    <li class="px-3 py-1">
-                        <div class="form-check form-switch">
-                            <input class="form-check-input" type="checkbox" id="darkModeSwitch" <%= user.dark_mode ? 'checked' : '' %>>
-                            <label class="form-check-label small" for="darkModeSwitch">Modo Escuro</label>
-                        </div>
-                    </li>
-                    <li><a class="dropdown-item text-danger" href="/logout">Sair</a></li>
-                </ul>
+        
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                <% if (user) { %>
+                    <li class="nav-item"><a class="nav-link" href="/dashboard"><i class="bi bi-speedometer2"></i> Dashboard</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/?status=owned"><i class="bi bi-box-seam"></i> Minha Coleção</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/?status=wanted"><i class="bi bi-heart"></i> Wishlist</a></li>
+                <% } %>
+            </ul>
+
+            <div class="d-flex align-items-center gap-3">
+                <a href="/" class="btn btn-outline-secondary rounded-pill btn-sm px-3"><i class="bi bi-arrow-left"></i> Voltar</a>
+                
+                <% if (user) { %>
+                <div class="dropdown">
+                    <button class="btn btn-outline-dark border-0 rounded-circle" type="button" data-bs-toggle="dropdown">
+                        <i class="bi bi-person-circle fs-5"></i>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end shadow">
+                        <li><h6 class="dropdown-header">Opções</h6></li>
+                        <% if (user.id === 1) { %>
+                            <li><a class="dropdown-item" href="/admin/sets">Gerir Sets</a></li>
+                            <li><a class="dropdown-item" href="/admin/themes">Gerir Temas</a></li>
+                            <li><a class="dropdown-item" href="/admin/users">Gerir Utilizadores</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                        <% } %>
+                        <li class="px-3 py-1">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="darkModeSwitch" <%= user.dark_mode ? 'checked' : '' %>>
+                                <label class="form-check-label small" for="darkModeSwitch">Modo Escuro</label>
+                            </div>
+                        </li>
+                        <li><a class="dropdown-item text-danger" href="/logout">Sair</a></li>
+                    </ul>
+                </div>
+                <% } %>
             </div>
-            <% } %>
         </div>
     </div>
 </nav>
 
 <div class="container py-2 py-md-4">
     <div class="row g-4">
-        
         <div class="col-lg-6">
             <div class="card shadow-sm border-0 position-sticky" style="top: 80px;">
                 <div class="card-body p-4 text-center bg-body">
@@ -54,7 +74,6 @@
         </div>
 
         <div class="col-lg-6">
-            
             <div class="mb-4">
                 <div class="d-flex flex-wrap gap-2 mb-2 align-items-center">
                     <span class="badge bg-primary fs-6">#<%= set.set_num %></span>
@@ -85,7 +104,6 @@
                     <h5 class="mb-0"><i class="bi bi-collection-fill me-2"></i> Gestão de Coleção</h5>
                 </div>
                 <div class="card-body p-4">
-                    
                     <div class="d-flex gap-3 mb-4">
                         <button onclick="toggleStatus('OWNED')" class="btn btn-lg flex-fill py-3 shadow-sm transition-all <%= set.user_status === 'OWNED' ? 'btn-success' : 'btn-outline-success' %>">
                             <div class="d-flex flex-column align-items-center">
@@ -129,7 +147,6 @@
                                     </div>
                                 </div>
                             </form>
-                            
                             <div class="text-center mt-3">
                                 <small class="text-muted" style="font-size: 0.75rem;">
                                     Adicionado em: <%= set.date_added ? new Date(set.date_added).toLocaleDateString('pt-PT') : 'Data desconhecida' %>
@@ -157,7 +174,6 @@
 <script>
     const setNum = "<%= set.set_num %>";
 
-    // --- DARK MODE LOGIC (Para funcionar nesta página também) ---
     const themeSwitch = document.getElementById('darkModeSwitch');
     if (themeSwitch) {
         themeSwitch.addEventListener('change', function() {
@@ -173,7 +189,6 @@
     async function toggleStatus(status) {
         let newStatus = status;
         if ("<%= set.user_status %>" === status) newStatus = 'REMOVE';
-        
         try {
             await fetch('/api/toggle', {
                 method: 'POST',
