@@ -2,118 +2,33 @@
 <html lang="pt" data-bs-theme="<%= user && user.dark_mode ? 'dark' : 'light' %>">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Manual do Utilizador - LegoTracker</title>
+    <title>Manual - LegoTracker</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
-    <style>
-        .step-icon { width: 40px; height: 40px; background: #e9ecef; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; }
-        [data-bs-theme="dark"] .step-icon { background: #343a40; color: #fff; }
-    </style>
 </head>
 <body class="bg-body-tertiary">
-
 <nav class="navbar navbar-expand-lg border-bottom mb-4 bg-body">
-    <div class="container-fluid px-4">
-        <a class="navbar-brand fw-bold" href="/">🧱 LegoTracker</a>
-        <div class="d-flex gap-3">
-            <a href="/" class="btn btn-outline-secondary btn-sm">Voltar</a>
-        </div>
-    </div>
+    <div class="container-fluid px-4"><a class="navbar-brand fw-bold" href="/">🧱 LegoTracker</a><a href="/" class="btn btn-outline-secondary btn-sm">Voltar</a></div>
 </nav>
-
 <div class="container py-4">
-    <div class="row justify-content-center">
-        <div class="col-lg-8">
-            <h2 class="mb-4 fw-bold"><i class="bi bi-book"></i> Manual do Utilizador</h2>
-
-            <div class="card shadow-sm border-0 mb-4">
-                <div class="card-body">
-                    <h3 class="card-title text-primary fw-bold mb-3"><i class="bi bi-upc-scan"></i> Como usar o Scanner</h3>
-                    <p class="text-muted">
-                        O scanner permite adicionar sets à coleção rapidamente usando a câmara do seu telemóvel para ler o código de barras da caixa.
-                    </p>
-
-                    <div class="alert alert-warning">
-                        <i class="bi bi-exclamation-triangle-fill"></i> <strong>Atenção:</strong> Por motivos de segurança dos browsers, a câmara só funciona se aceder ao site via:
-                        <ul class="mb-0 mt-1">
-                            <li><strong>Localhost:</strong> (no próprio PC onde corre o servidor)</li>
-                            <li><strong>HTTPS:</strong> (se tiver certificado de segurança)</li>
-                        </ul>
-                        Se aceder por IP (ex: <code>192.168.1.5:3000</code>), o Chrome/Safari pode bloquear a câmara. Use a <strong>Pesquisa Manual</strong> se isso acontecer.
-                    </div>
-
-                    <h5 class="mt-4 fw-bold">Passo a Passo:</h5>
-                    
-                    <div class="d-flex gap-3 mb-3 align-items-start">
-                        <div class="step-icon">1</div>
-                        <div>
-                            <strong>Abrir o Scanner</strong><br>
-                            Clique no botão amarelo <strong>"Scan"</strong> na barra superior.
-                        </div>
-                    </div>
-
-                    <div class="d-flex gap-3 mb-3 align-items-start">
-                        <div class="step-icon">2</div>
-                        <div>
-                            <strong>Permissões e Câmara</strong><br>
-                            O browser vai pedir permissão para usar a câmara. Aceite.<br>
-                            Se tiver várias câmaras, use o menu dropdown para escolher a melhor (ex: "Back Camera" ou "Environment").
-                        </div>
-                    </div>
-
-                    <div class="d-flex gap-3 mb-3 align-items-start">
-                        <div class="step-icon">3</div>
-                        <div>
-                            <strong>Ler o Código</strong><br>
-                            Aponte a câmara para o código de barras (EAN ou UPC).<br>
-                            Se necessário, use a barra de <strong>Zoom</strong> para focar melhor.
-                        </div>
-                    </div>
-
-                    <div class="d-flex gap-3 mb-3 align-items-start">
-                        <div class="step-icon">4</div>
-                        <div>
-                            <strong>Ação</strong><br>
-                            Quando o set for detetado, clique em:<br>
-                            <button class="btn btn-success btn-sm me-1"><i class="bi bi-check-lg"></i> Tenho</button> para adicionar à coleção.<br>
-                            <button class="btn btn-outline-danger btn-sm"><i class="bi bi-heart"></i> Quero</button> para adicionar à Wishlist.
-                        </div>
-                    </div>
-
-                    <hr>
-                    <h5 class="mt-4 fw-bold text-warning"><i class="bi bi-keyboard"></i> Falha no Scan? Use a Correção Manual!</h5>
-                    <p class="small text-muted">Se o código de barras estiver danificado ou o scanner identificar o set errado (ex: um Battle Pack em vez do set principal), não precisa de fechar a janela.</p>
-                    <div class="alert alert-secondary">
-                        <ol class="mb-0">
-                            <li>Mantenha o Modal do Scanner aberto.</li>
-                            <li>No fundo da janela, verá o campo <strong>"Set errado? Digite o nº aqui..."</strong>.</li>
-                            <li>Escreva o número correto (ex: <strong>75360</strong>) e clique em <strong>Pesquisar</strong>.</li>
-                            <li>O set correto aparecerá imediatamente.</li>
-                        </ol>
-                    </div>
-                </div>
-            </div>
-
-            <div class="card shadow-sm border-0">
-                <div class="card-body">
-                    <h4 class="fw-bold mb-3">Outras Funcionalidades</h4>
-                    
-                    <h6 class="fw-bold"><i class="bi bi-speedometer2"></i> Dashboard Financeiro</h6>
-                    <p class="small text-muted">Veja o valor total da sua coleção e compare o seu custo real com o valor de mercado (PVP).</p>
-
-                    <h6 class="fw-bold"><i class="bi bi-arrow-down-up"></i> Importar/Exportar</h6>
-                    <p class="small text-muted">Faça backup da sua coleção em CSV ou importe listas do Brickset/Excel.</p>
-
-                    <h6 class="fw-bold"><i class="bi bi-pencil-square"></i> Edição de Detalhes</h6>
-                    <p class="small text-muted">Na página de cada set, pode definir o estado (Montado, Selado), a localização física e o preço que pagou.</p>
-                </div>
-            </div>
-
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-body">
+            <h3 class="card-title text-primary fw-bold mb-3"><i class="bi bi-upc-scan"></i> Scanner com Auto-Aprendizagem</h3>
+            <p class="text-muted">Este scanner aprende consigo. Se o código de barras de uma caixa não for reconhecido, você ensina ao sistema qual é o set correto uma única vez.</p>
+            <h5 class="fw-bold mt-4">Como funciona:</h5>
+            <ol class="list-group list-group-numbered mb-3">
+                <li class="list-group-item">Clique em <strong>Scan</strong> e aponte a câmara para o código de barras.</li>
+                <li class="list-group-item">Se o set aparecer, ótimo! Adicione à coleção.</li>
+                <li class="list-group-item list-group-item-warning">
+                    <strong>Se falhar ou mostrar o set errado:</strong>
+                    <br>Não feche a janela! No campo em baixo ("Falhou?"), digite o número correto do set (ex: 75360) e clique em <strong>Corrigir</strong>.
+                </li>
+                <li class="list-group-item list-group-item-success">
+                    <strong>O sistema aprendeu!</strong> Da próxima vez que fizer scan desse código, ele abrirá o set correto instantaneamente.
+                </li>
+            </ol>
         </div>
     </div>
 </div>
-
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
