@@ -32,7 +32,7 @@ async function sendEmail(to, subject, text) {
 
 function ensureAdmin(req, res, next) { if (req.user && req.user.id === 1) return next(); res.status(403).send("Acesso Negado."); }
 
-// Configuração Passport
+// Passport
 passport.serializeUser((user, done) => done(null, user.id));
 passport.deserializeUser((id, done) => {
     db.get("SELECT id, name, email, dark_mode, items_per_page, google_id FROM users WHERE id = ?", [id], (err, row) => done(err, row));
@@ -96,6 +96,11 @@ app.use((req, res, next) => {
     next();
 });
 
+// Helper DB
+const dbGet = (sql, params) => new Promise((resolve, reject) => {
+    db.get(sql, params, (err, row) => { if(err) reject(err); else resolve(row); });
+});
+
 function buildFilters(query, userId, isAdminView = false) {
     let { themes, year, search, status } = query;
     let whereClause = "WHERE 1=1";
@@ -114,319 +119,125 @@ function buildFilters(query, userId, isAdminView = false) {
     return { whereClause, params };
 }
 
-// --- ROTAS NOVAS (V11) ---
+// --- ROTAS DO SCANNER (V11.2 - COM APRENDIZAGEM) ---
 
-app.get('/manual', (req, res) => {
-    res.render('manual', { user: req.user });
-});
+app.get('/manual', (req, res) => res.render('manual', { user: req.user }));
 
-// ROTA API: SCANNER COM LOGS DE DEBUG
+// 1. ROTA DE PESQUISA (Agora verifica DB local primeiro)
 app.get('/api/scan', async (req, res) => {
     if (!req.user) return res.status(401).send();
     const { code } = req.query;
-
     if (!code) return res.status(400).json({ error: 'Código inválido' });
 
     const cleanCode = code.trim();
     let foundSetNum = null;
-    let debugLog = []; // Vamos guardar o histórico para enviar ao frontend
+    let debugLog = [];
 
     console.log(`\n🔍 [SCANNER] Recebido: "${cleanCode}"`);
     debugLog.push(`Recebido: ${cleanCode}`);
 
     try {
-        // CASO 1: É SET DIRETO?
-        if (cleanCode.length < 8) {
-            foundSetNum = cleanCode.includes('-') ? cleanCode : `${cleanCode}-1`;
-            console.log(`   > Assumido como Nº Set: ${foundSetNum}`);
-            debugLog.push(`Assumido como Set: ${foundSetNum}`);
+        // PASSO 0: VERIFICAR MEMÓRIA LOCAL (AQUI ESTÁ A APRENDIZAGEM)
+        // Se já associámos este código antes, usa-o!
+        const localMatch = await dbGet("SELECT set_num FROM barcodes WHERE code = ?", [cleanCode]);
+        
+        if (localMatch) {
+            foundSetNum = localMatch.set_num;
+            console.log(`   🧠 Memória Local: ${cleanCode} -> ${foundSetNum}`);
+            debugLog.push(`Memória Local: Encontrado -> ${foundSetNum}`);
         } 
-        // CASO 2: É CÓDIGO DE BARRAS?
+        else if (cleanCode.length < 8) {
+            // Se for numero curto, é o set direto
+            foundSetNum = cleanCode.includes('-') ? cleanCode : `${cleanCode}-1`;
+            debugLog.push(`Assumido como Set ID`);
+        } 
         else {
+            // Tenta APIs Externas
             if (process.env.BRICKSET_API_KEY) {
                 try {
-                    console.log(`   > A perguntar ao Brickset...`);
                     const bsParams = JSON.stringify({ query: cleanCode });
                     const bsUrl = `https://brickset.com/api/v3.asmx/getSets?apiKey=${process.env.BRICKSET_API_KEY}&userHash=&params=${encodeURIComponent(bsParams)}`;
-                    
                     const bsRes = await axios.get(bsUrl, { timeout: 5000 });
-                    
                     if (bsRes.data && bsRes.data.sets && bsRes.data.sets.length > 0) {
                         const match = bsRes.data.sets[0];
                         foundSetNum = `${match.number}-${match.numberVariant}`;
-                        console.log(`   ✅ Brickset Encontrou: ${foundSetNum} (${match.name})`);
                         debugLog.push(`Brickset: Sucesso -> ${foundSetNum}`);
-                    } else {
-                        console.log(`   ❌ Brickset: Não encontrado.`);
-                        debugLog.push(`Brickset: Não encontrado`);
                     }
-                } catch (err) { 
-                    console.error(`   ⚠️ Erro Brickset: ${err.message}`);
-                    debugLog.push(`Erro Brickset: ${err.message}`);
-                }
+                } catch (err) { debugLog.push(`Erro Brickset`); }
             }
             
-            // Fallback Rebrickable
             if (!foundSetNum) {
-                console.log(`   > A tentar Rebrickable Search...`);
                 const rbUrl = `https://rebrickable.com/api/v3/lego/sets/?search=${cleanCode}&page_size=1`;
                 const rbRes = await axios.get(rbUrl, { headers: { 'Authorization': `key ${process.env.REBRICKABLE_API_KEY}` }});
                 if (rbRes.data.results && rbRes.data.results.length > 0) {
                     foundSetNum = rbRes.data.results[0].set_num;
-                    console.log(`   ✅ Rebrickable Encontrou: ${foundSetNum}`);
-                    debugLog.push(`Rebrickable Search: Sucesso -> ${foundSetNum}`);
-                } else {
-                    console.log(`   ❌ Rebrickable: Nada.`);
-                    debugLog.push(`Rebrickable Search: Nada`);
+                    debugLog.push(`Rebrickable: Sucesso -> ${foundSetNum}`);
                 }
             }
         }
 
-        // 3. BUSCAR DETALHES FINAIS
+        // BUSCAR DETALHES FINAIS
         if (foundSetNum) {
-            console.log(`   > A obter detalhes finais para: ${foundSetNum}`);
             const detailsUrl = `https://rebrickable.com/api/v3/lego/sets/${foundSetNum}/`;
             const detailsRes = await axios.get(detailsUrl, { headers: { 'Authorization': `key ${process.env.REBRICKABLE_API_KEY}` }});
             const set = detailsRes.data;
 
-            db.get("SELECT status FROM user_sets WHERE user_id = ? AND set_num = ?", [req.user.id, set.set_num], (err, row) => {
-                res.json({
-                    found: true,
-                    debug: debugLog,
-                    set: {
-                        set_num: set.set_num,
-                        name: set.name,
-                        year: set.year,
-                        img_url: set.set_img_url,
-                        num_parts: set.num_parts,
-                        user_status: row ? row.status : null
-                    }
-                });
+            const row = await dbGet("SELECT status FROM user_sets WHERE user_id = ? AND set_num = ?", [req.user.id, set.set_num]);
+            
+            res.json({
+                found: true,
+                debug: debugLog,
+                set: {
+                    set_num: set.set_num,
+                    name: set.name,
+                    year: set.year,
+                    img_url: set.set_img_url,
+                    num_parts: set.num_parts,
+                    user_status: row ? row.status : null
+                }
             });
         } else {
-            console.log(`🏁 [SCANNER] Resultado Final: FALSO (Não encontrado em lado nenhum)`);
+            console.log(`   ❌ Não encontrado em lado nenhum.`);
             res.json({ found: false, debug: debugLog, scanned_code: cleanCode });
         }
 
     } catch (e) {
-        console.error(`💥 ERRO FATAL SCANNER: ${e.message}`);
-        // Se der 404 no detalhe final, devolve não encontrado
+        console.error(`💥 ERRO SCANNER: ${e.message}`);
         res.json({ found: false, debug: debugLog, error: e.message }); 
     }
 });
 
-// --- ROTAS EXISTENTES (Import/Export, Dashboard, etc.) ---
-
-app.get('/import', (req, res) => {
-    if (!req.user) return res.redirect('/login');
-    res.render('import', { user: req.user });
-});
-
-app.get('/api/export', (req, res) => {
+// 2. NOVA ROTA: APRENDER ASSOCIAÇÃO
+app.post('/api/scan/associate', (req, res) => {
     if (!req.user) return res.status(401).send();
-    
-    const sql = `
-        SELECT user_sets.set_num, sets.name, user_sets.quantity, user_sets.status, 
-               user_sets.purchase_price, user_sets.build_status, user_sets.location
-        FROM user_sets 
-        LEFT JOIN sets ON user_sets.set_num = sets.set_num
-        WHERE user_sets.user_id = ?
-    `;
+    const { barcode, set_num } = req.body;
 
-    db.all(sql, [req.user.id], (err, rows) => {
-        if (err) return res.status(500).send("Erro ao exportar.");
+    if (!barcode || !set_num) return res.status(400).send();
 
-        let csvContent = "set_num,name,quantity,status,purchase_price,build_status,location\n";
-        
-        rows.forEach(row => {
-            const name = row.name ? `"${row.name.replace(/"/g, '""')}"` : "";
-            const line = [
-                row.set_num, name, row.quantity, row.status, 
-                row.purchase_price || 0, row.build_status || '', row.location || ''
-            ].join(",");
-            csvContent += line + "\n";
-        });
-
-        res.header('Content-Type', 'text/csv');
-        res.header('Content-Disposition', 'attachment; filename="lego_collection.csv"');
-        res.send(csvContent);
-    });
-});
-
-app.post('/api/import', upload.single('csvfile'), (req, res) => {
-    if (!req.user) return res.status(401).send();
-    if (!req.file) return res.redirect('/import?error=Nenhum ficheiro enviado');
-
-    const results = [];
-    fs.createReadStream(req.file.path)
-        .pipe(csv())
-        .on('data', (data) => results.push(data))
-        .on('end', () => {
-            fs.unlinkSync(req.file.path);
-
-            let successCount = 0;
-            const stmt = db.prepare(`
-                INSERT INTO user_sets (user_id, set_num, quantity, status, purchase_price, build_status, location)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(user_id, set_num) DO UPDATE SET
-                    quantity = excluded.quantity,
-                    status = excluded.status,
-                    purchase_price = excluded.purchase_price,
-                    build_status = excluded.build_status,
-                    location = excluded.location
-            `);
-
-            db.serialize(() => {
-                db.run("BEGIN TRANSACTION");
-                
-                results.forEach(row => {
-                    let setNum = row.set_num || row['Set Number'] || row['SetNumber'] || row['Item No'];
-                    
-                    if (setNum) {
-                        if (!setNum.includes('-')) setNum += '-1';
-
-                        const qty = parseInt(row.quantity || row.Quantity || row.Qty || 1) || 1;
-                        let status = 'OWNED';
-                        
-                        const rowStatus = (row.status || row.Status || '').toUpperCase();
-                        if (rowStatus.includes('WANT') || rowStatus.includes('WISH')) status = 'WANTED';
-
-                        const price = parseFloat(row.purchase_price || row['Retail Price'] || 0) || 0;
-                        const build = row.build_status || 'Montado';
-                        const loc = row.location || '';
-
-                        stmt.run(req.user.id, setNum, qty, status, price, build, loc);
-                        successCount++;
-                    }
-                });
-
-                stmt.finalize();
-                db.run("COMMIT", () => {
-                    res.redirect(`/import?success=${successCount} sets importados/atualizados com sucesso!`);
-                });
-            });
-        });
-});
-
-app.get('/dashboard', (req, res) => {
-    if (!req.user) return res.redirect('/login');
-    const userId = req.user.id;
-
-    const q1 = new Promise(r => db.get(`
-        SELECT 
-            COUNT(*) as total_sets, 
-            SUM(quantity) as total_items, 
-            SUM(sets.num_parts * user_sets.quantity) as total_parts,
-            COALESCE(SUM(user_sets.purchase_price * user_sets.quantity), 0) as total_spent,
-            COALESCE(SUM(sets.price_eur * user_sets.quantity), 0) as total_value_rrp
-        FROM user_sets JOIN sets ON user_sets.set_num = sets.set_num 
-        WHERE user_id = ? AND status = 'OWNED'`, [userId], (e, row) => r(row)));
-
-    const q2 = new Promise(r => db.get(`SELECT COUNT(*) as wanted_count, COALESCE(SUM(sets.price_eur), 0) as wanted_value FROM user_sets JOIN sets ON user_sets.set_num = sets.set_num WHERE user_id = ? AND status = 'WANTED'`, [userId], (e, row) => r(row)));
-
-    const q3 = new Promise(r => db.all(`SELECT themes.name, COUNT(*) as count FROM user_sets JOIN sets ON user_sets.set_num = sets.set_num JOIN themes ON sets.theme_id = themes.id WHERE user_sets.user_id = ? AND user_sets.status = 'OWNED' GROUP BY themes.name ORDER BY count DESC LIMIT 5`, [userId], (e, rows) => r(rows)));
-
-    const q4 = new Promise(r => db.all(`SELECT sets.year, COUNT(*) as count FROM user_sets JOIN sets ON user_sets.set_num = sets.set_num WHERE user_sets.user_id = ? AND user_sets.status = 'OWNED' GROUP BY sets.year ORDER BY sets.year ASC`, [userId], (e, rows) => r(rows)));
-
-    Promise.all([q1, q2, q3, q4]).then(([stats, wishlist, themes, years]) => {
-        res.render('dashboard', { 
-            stats: stats || {total_sets:0, total_items:0, total_parts:0, total_spent:0, total_value_rrp:0},
-            wishlist: wishlist || {wanted_count:0, wanted_value:0},
-            themes: themes || [],
-            years: years || [],
-            user: req.user
-        });
-    }).catch(e => res.send("Erro no Dashboard: " + e.message));
-});
-
-app.get('/', (req, res) => {
-    const userId = req.user ? req.user.id : null;
-    let { limit, page, sort } = req.query;
-    let limitVal = limit || (req.user ? req.user.items_per_page : 25);
-    if (limitVal === 'all') limitVal = 10000;
-    let pageVal = parseInt(page) || 1;
-    let offset = (pageVal - 1) * limitVal;
-
-    const filter = buildFilters(req.query, userId, false);
-
-    let orderBy = "themes.name ASC, sets.year DESC";
-    if (sort === 'year_desc') orderBy = "sets.year DESC, sets.name ASC";
-    if (sort === 'year_asc') orderBy = "sets.year ASC, sets.name ASC";
-    if (sort === 'parts_desc') orderBy = "sets.num_parts DESC";
-    if (sort === 'added_desc') orderBy = "user_sets.date_added DESC";
-    if (sort === 'name_asc') orderBy = "sets.name ASC";
-
-    let countSql = `SELECT COUNT(*) as total FROM sets LEFT JOIN themes ON sets.theme_id = themes.id LEFT JOIN user_sets ON sets.set_num = user_sets.set_num AND user_sets.user_id = ? ${filter.whereClause}`;
-    db.get(countSql, [userId, ...filter.params], (err, row) => {
-        const totalItems = row ? row.total : 0; const totalPages = Math.ceil(totalItems / limitVal);
-        let dataSql = `SELECT sets.*, themes.name as theme_name, user_sets.status as user_status, user_sets.quantity FROM sets LEFT JOIN themes ON sets.theme_id = themes.id LEFT JOIN user_sets ON sets.set_num = user_sets.set_num AND user_sets.user_id = ? ${filter.whereClause} ORDER BY ${orderBy} LIMIT ? OFFSET ?`;
-        db.all(dataSql, [userId, ...filter.params, limitVal, offset], (err, sets) => {
-            let themesSql = `SELECT themes.name, MIN(sets.year) as min_year, MAX(sets.year) as max_year FROM themes JOIN sets ON themes.id = sets.theme_id WHERE (themes.is_hidden IS NULL OR themes.is_hidden = 0) GROUP BY themes.name ORDER BY themes.name ASC`;
-            db.all(themesSql, [], (e1, allThemes) => {
-                db.all("SELECT DISTINCT year FROM sets ORDER BY year DESC", [], (e2, allYears) => {
-                    res.render('index', { sets: sets || [], allThemes: allThemes || [], allYears: allYears || [], query: req.query, pagination: { page: pageVal, limit: limitVal, totalPages, totalItems }, user: req.user, currentYear: new Date().getFullYear() });
-                });
-            });
-        });
-    });
-});
-
-app.get('/set/:set_num', (req, res) => {
-    const userId = req.user ? req.user.id : null;
-    const { set_num } = req.params;
-    const sql = `
-        SELECT sets.*, themes.name as theme_name, 
-        user_sets.status as user_status, 
-        user_sets.quantity,
-        user_sets.date_added,
-        user_sets.build_status, 
-        user_sets.location, 
-        user_sets.purchase_price,
-        sets.price_eur 
-        FROM sets 
-        LEFT JOIN themes ON sets.theme_id = themes.id 
-        LEFT JOIN user_sets ON sets.set_num = user_sets.set_num AND user_sets.user_id = ? 
-        WHERE sets.set_num = ?`;
-    db.get(sql, [userId, set_num], (err, set) => {
-        if (err || !set) return res.status(404).render('index', { error: 'Set não encontrado', sets:[], allThemes:[], allYears:[], query:{}, pagination:{}, user: req.user });
-        set.rb_url = `https://rebrickable.com/sets/${set.set_num}`;
-        res.render('set_detail', { set, user: req.user });
-    });
-});
-
-app.post('/api/toggle', (req, res) => {
-    if (!req.user) return res.status(401).send();
-    const { set_num, status } = req.body;
-    if (status === 'REMOVE') db.run("DELETE FROM user_sets WHERE user_id=? AND set_num=?", [req.user.id, set_num], () => res.json({ok: true, status: null}));
-    else {
-        const sql = `INSERT INTO user_sets (user_id, set_num, status, quantity, build_status) VALUES (?, ?, ?, 1, 'Montado') ON CONFLICT(user_id, set_num) DO UPDATE SET status = excluded.status`;
-        db.run(sql, [req.user.id, set_num, status], () => res.json({ok: true, status: status}));
-    }
-});
-
-app.post('/api/user_set/update', (req, res) => {
-    if (!req.user) return res.status(401).send();
-    const { set_num, build_status, location, purchase_price, price_eur } = req.body;
-    
-    // 1. Atualizar dados do Utilizador
-    const sqlUser = "UPDATE user_sets SET build_status = ?, location = ?, purchase_price = ? WHERE user_id = ? AND set_num = ?";
-    db.run(sqlUser, [build_status, location, purchase_price || 0, req.user.id, set_num], (err) => {
-        if (err) return res.status(500).json({error: err.message});
-
-        // 2. Atualizar dados do Set (PVP) se fornecido
-        if (price_eur !== undefined) {
-            db.run("UPDATE sets SET price_eur = ? WHERE set_num = ?", [price_eur || 0, set_num], () => {
-                res.json({success: true});
-            });
-        } else {
-            res.json({success: true});
+    // Guardar na tabela barcodes
+    db.run("INSERT OR REPLACE INTO barcodes (code, set_num) VALUES (?, ?)", [barcode, set_num], (err) => {
+        if (err) {
+            console.error("Erro ao associar barcode:", err.message);
+            return res.status(500).json({success: false});
         }
+        console.log(`💾 [APRENDIZAGEM] Associado: ${barcode} = ${set_num}`);
+        res.json({success: true});
     });
 });
 
+// --- RESTO DAS ROTAS (IGUAIS) ---
+
+app.get('/import', (req, res) => { if (!req.user) return res.redirect('/login'); res.render('import', { user: req.user }); });
+app.get('/api/export', (req, res) => { if (!req.user) return res.status(401).send(); const sql = `SELECT user_sets.set_num, sets.name, user_sets.quantity, user_sets.status, user_sets.purchase_price, user_sets.build_status, user_sets.location FROM user_sets LEFT JOIN sets ON user_sets.set_num = sets.set_num WHERE user_sets.user_id = ?`; db.all(sql, [req.user.id], (err, rows) => { if (err) return res.status(500).send("Erro."); let csvContent = "set_num,name,quantity,status,purchase_price,build_status,location\n"; rows.forEach(row => { const name = row.name ? `"${row.name.replace(/"/g, '""')}"` : ""; const line = [row.set_num, name, row.quantity, row.status, row.purchase_price || 0, row.build_status || '', row.location || ''].join(","); csvContent += line + "\n"; }); res.header('Content-Type', 'text/csv'); res.header('Content-Disposition', 'attachment; filename="lego_collection.csv"'); res.send(csvContent); }); });
+app.post('/api/import', upload.single('csvfile'), (req, res) => { if (!req.user) return res.status(401).send(); if (!req.file) return res.redirect('/import?error=Ficheiro em falta'); const results = []; fs.createReadStream(req.file.path).pipe(csv()).on('data', (data) => results.push(data)).on('end', () => { fs.unlinkSync(req.file.path); let successCount = 0; const stmt = db.prepare(`INSERT INTO user_sets (user_id, set_num, quantity, status, purchase_price, build_status, location) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(user_id, set_num) DO UPDATE SET quantity = excluded.quantity, status = excluded.status, purchase_price = excluded.purchase_price, build_status = excluded.build_status, location = excluded.location`); db.serialize(() => { db.run("BEGIN TRANSACTION"); results.forEach(row => { let setNum = row.set_num || row['Set Number'] || row['SetNumber']; if (setNum) { if (!setNum.includes('-')) setNum += '-1'; const qty = parseInt(row.quantity || 1) || 1; let status = 'OWNED'; if ((row.status || '').toUpperCase().includes('WANT')) status = 'WANTED'; const price = parseFloat(row.purchase_price || 0) || 0; const build = row.build_status || 'Montado'; const loc = row.location || ''; stmt.run(req.user.id, setNum, qty, status, price, build, loc); successCount++; } }); stmt.finalize(); db.run("COMMIT", () => { res.redirect(`/import?success=${successCount} importados!`); }); }); }); });
+app.get('/dashboard', (req, res) => { if (!req.user) return res.redirect('/login'); const userId = req.user.id; const q1 = new Promise(r => db.get(`SELECT COUNT(*) as total_sets, SUM(quantity) as total_items, SUM(sets.num_parts * user_sets.quantity) as total_parts, COALESCE(SUM(user_sets.purchase_price * user_sets.quantity), 0) as total_spent, COALESCE(SUM(sets.price_eur * user_sets.quantity), 0) as total_value_rrp FROM user_sets JOIN sets ON user_sets.set_num = sets.set_num WHERE user_id = ? AND status = 'OWNED'`, [userId], (e, row) => r(row))); const q2 = new Promise(r => db.get(`SELECT COUNT(*) as wanted_count, COALESCE(SUM(sets.price_eur), 0) as wanted_value FROM user_sets JOIN sets ON user_sets.set_num = sets.set_num WHERE user_id = ? AND status = 'WANTED'`, [userId], (e, row) => r(row))); const q3 = new Promise(r => db.all(`SELECT themes.name, COUNT(*) as count FROM user_sets JOIN sets ON user_sets.set_num = sets.set_num JOIN themes ON sets.theme_id = themes.id WHERE user_sets.user_id = ? AND user_sets.status = 'OWNED' GROUP BY themes.name ORDER BY count DESC LIMIT 5`, [userId], (e, rows) => r(rows))); const q4 = new Promise(r => db.all(`SELECT sets.year, COUNT(*) as count FROM user_sets JOIN sets ON user_sets.set_num = sets.set_num WHERE user_sets.user_id = ? AND user_sets.status = 'OWNED' GROUP BY sets.year ORDER BY sets.year ASC`, [userId], (e, rows) => r(rows))); Promise.all([q1, q2, q3, q4]).then(([stats, wishlist, themes, years]) => { res.render('dashboard', { stats: stats || {}, wishlist: wishlist || {}, themes: themes || [], years: years || [], user: req.user }); }).catch(e => res.send("Erro: " + e.message)); });
+app.get('/', (req, res) => { const userId = req.user ? req.user.id : null; let { limit, page, sort } = req.query; let limitVal = limit || (req.user ? req.user.items_per_page : 25); if (limitVal === 'all') limitVal = 10000; let pageVal = parseInt(page) || 1; let offset = (pageVal - 1) * limitVal; const filter = buildFilters(req.query, userId, false); let orderBy = "themes.name ASC, sets.year DESC"; if (sort === 'year_desc') orderBy = "sets.year DESC, sets.name ASC"; if (sort === 'year_asc') orderBy = "sets.year ASC, sets.name ASC"; if (sort === 'parts_desc') orderBy = "sets.num_parts DESC"; if (sort === 'added_desc') orderBy = "user_sets.date_added DESC"; if (sort === 'name_asc') orderBy = "sets.name ASC"; let countSql = `SELECT COUNT(*) as total FROM sets LEFT JOIN themes ON sets.theme_id = themes.id LEFT JOIN user_sets ON sets.set_num = user_sets.set_num AND user_sets.user_id = ? ${filter.whereClause}`; db.get(countSql, [userId, ...filter.params], (err, row) => { const totalItems = row ? row.total : 0; const totalPages = Math.ceil(totalItems / limitVal); let dataSql = `SELECT sets.*, themes.name as theme_name, user_sets.status as user_status, user_sets.quantity FROM sets LEFT JOIN themes ON sets.theme_id = themes.id LEFT JOIN user_sets ON sets.set_num = user_sets.set_num AND user_sets.user_id = ? ${filter.whereClause} ORDER BY ${orderBy} LIMIT ? OFFSET ?`; db.all(dataSql, [userId, ...filter.params, limitVal, offset], (err, sets) => { let themesSql = `SELECT themes.name, MIN(sets.year) as min_year, MAX(sets.year) as max_year FROM themes JOIN sets ON themes.id = sets.theme_id WHERE (themes.is_hidden IS NULL OR themes.is_hidden = 0) GROUP BY themes.name ORDER BY themes.name ASC`; db.all(themesSql, [], (e1, allThemes) => { db.all("SELECT DISTINCT year FROM sets ORDER BY year DESC", [], (e2, allYears) => { res.render('index', { sets: sets || [], allThemes: allThemes || [], allYears: allYears || [], query: req.query, pagination: { page: pageVal, limit: limitVal, totalPages, totalItems }, user: req.user, currentYear: new Date().getFullYear() }); }); }); }); }); });
+app.get('/set/:set_num', (req, res) => { const userId = req.user ? req.user.id : null; const { set_num } = req.params; const sql = `SELECT sets.*, themes.name as theme_name, user_sets.status as user_status, user_sets.quantity, user_sets.date_added, user_sets.build_status, user_sets.location, user_sets.purchase_price, sets.price_eur FROM sets LEFT JOIN themes ON sets.theme_id = themes.id LEFT JOIN user_sets ON sets.set_num = user_sets.set_num AND user_sets.user_id = ? WHERE sets.set_num = ?`; db.get(sql, [userId, set_num], (err, set) => { if (err || !set) return res.status(404).render('index', { error: 'Set não encontrado', sets:[], allThemes:[], allYears:[], query:{}, pagination:{}, user: req.user }); set.rb_url = `https://rebrickable.com/sets/${set.set_num}`; res.render('set_detail', { set, user: req.user }); }); });
+app.post('/api/toggle', (req, res) => { if (!req.user) return res.status(401).send(); const { set_num, status } = req.body; if (status === 'REMOVE') db.run("DELETE FROM user_sets WHERE user_id=? AND set_num=?", [req.user.id, set_num], () => res.json({ok: true, status: null})); else { const sql = `INSERT INTO user_sets (user_id, set_num, status, quantity, build_status) VALUES (?, ?, ?, 1, 'Montado') ON CONFLICT(user_id, set_num) DO UPDATE SET status = excluded.status`; db.run(sql, [req.user.id, set_num, status], () => res.json({ok: true, status: status})); } });
+app.post('/api/user_set/update', (req, res) => { if (!req.user) return res.status(401).send(); const { set_num, build_status, location, purchase_price, price_eur } = req.body; db.run("UPDATE user_sets SET build_status = ?, location = ?, purchase_price = ? WHERE user_id = ? AND set_num = ?", [build_status, location, purchase_price || 0, req.user.id, set_num], (err) => { if (err) return res.status(500).json({error: err.message}); if (price_eur !== undefined) db.run("UPDATE sets SET price_eur = ? WHERE set_num = ?", [price_eur || 0, set_num], () => res.json({success: true})); else res.json({success: true}); }); });
 app.post('/api/preferences', (req, res) => { if (!req.user) return res.status(401).send(); const { dark_mode, items_per_page } = req.body; let sql="UPDATE users SET ", p=[], u=[]; if(dark_mode!==undefined) {u.push("dark_mode=?"); p.push(dark_mode?1:0);} if(items_per_page!==undefined) {u.push("items_per_page=?"); p.push(items_per_page);} if(u.length) { sql+=u.join(",")+" WHERE id=?"; p.push(req.user.id); db.run(sql,p,()=>res.json({ok:true})); } else res.json({ok:true}); });
 
-// ADMIN (Igual)
+// ADMIN, LOGIN, AUTH, CRON (IGUAIS)
 app.get('/admin/sets', ensureAdmin, (req, res) => { let { limit, page } = req.query; let limitVal = limit || 50; let pageVal = parseInt(page) || 1; let offset = (pageVal - 1) * limitVal; const filter = buildFilters(req.query, req.user.id, true); let countSql = `SELECT COUNT(*) as total FROM sets LEFT JOIN themes ON sets.theme_id = themes.id ${filter.whereClause}`; db.get(countSql, filter.params, (err, row) => { const totalItems = row ? row.total : 0; const totalPages = Math.ceil(totalItems / limitVal); let dataSql = `SELECT sets.*, themes.name as theme_name FROM sets LEFT JOIN themes ON sets.theme_id = themes.id ${filter.whereClause} ORDER BY sets.year DESC, sets.name ASC LIMIT ? OFFSET ?`; db.all(dataSql, [...filter.params, limitVal, offset], (err, sets) => { let themesSql = `SELECT themes.name, MIN(sets.year) as min_year, MAX(sets.year) as max_year FROM themes JOIN sets ON themes.id = sets.theme_id GROUP BY themes.name ORDER BY themes.name ASC`; db.all(themesSql, [], (e1, allThemes) => { db.all("SELECT DISTINCT year FROM sets ORDER BY year DESC", [], (e2, allYears) => { res.render('admin/sets', { sets: sets || [], allThemes: allThemes || [], allYears: allYears || [], query: req.query, pagination: { page: pageVal, limit: limitVal, totalPages, totalItems }, user: req.user, currentYear: new Date().getFullYear() }); }); }); }); }); });
 app.post('/admin/sets/toggle', ensureAdmin, (req, res) => { const { set_num, field, value } = req.body; if (!['is_hidden', 'ignore_parts'].includes(field)) return res.status(400).send(); db.run(`UPDATE sets SET ${field} = ? WHERE set_num = ?`, [value ? 1 : 0, set_num], (err) => res.json({success: !err})); });
 app.get('/admin/themes', ensureAdmin, (req, res) => { const sql = `SELECT t.id, t.name, t.is_hidden, t.ignore_parts, COUNT(s.set_num) as total_sets, SUM(CASE WHEN s.num_parts = 0 THEN 1 ELSE 0 END) as zero_part_sets, MIN(s.year) as min_year, MAX(s.year) as max_year FROM themes t LEFT JOIN sets s ON t.id = s.theme_id GROUP BY t.id ORDER BY t.name ASC`; db.all(sql, [], (err, themes) => res.render('admin/themes', { themes: themes || [], user: req.user })); });
