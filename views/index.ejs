@@ -9,13 +9,66 @@
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
     <style>
         body { transition: background-color 0.3s; }
+        
+        /* Sidebar e Lista de Temas */
+        .sidebar-scroll { 
+            max-height: 50vh; 
+            overflow-y: auto; 
+            overflow-x: hidden;
+            border-radius: 8px;
+            padding: 5px;
+            scrollbar-width: thin;
+        }
+
+        .theme-item {
+            padding: 8px 12px;
+            margin-bottom: 4px;
+            border-radius: 6px;
+            transition: background 0.2s;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            border: 1px solid transparent;
+        }
+
+        .theme-item:hover {
+            background-color: rgba(13, 110, 253, 0.1);
+        }
+
+        .theme-item input {
+            margin-right: 12px;
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        .theme-item label {
+            cursor: pointer;
+            flex-grow: 1;
+            margin-bottom: 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            font-size: 0.9rem;
+        }
+
+        /* Destaque para selecionados */
+        .theme-item.selected {
+            background-color: rgba(13, 110, 253, 0.15);
+            border-color: rgba(13, 110, 253, 0.3);
+            font-weight: 500;
+        }
+
+        /* Estilos Cards */
         .set-card img { height: 160px; object-fit: contain; padding: 10px; width: 100%; }
         .is-owned { border: 2px solid #198754 !important; background-color: rgba(25, 135, 84, 0.05); }
         .is-wanted { border: 2px solid #dc3545 !important; background-color: rgba(220, 53, 69, 0.05); }
-        .sidebar-scroll { max-height: 60vh; overflow-y: auto; }
-        #reader { width: 100%; border-radius: 12px; overflow: hidden; background: #000; }
-        .card { transition: transform 0.2s; }
-        .card:hover { transform: translateY(-5px); }
+
+        /* Ajustes Mobile */
+        @media (max-width: 768px) {
+            .sidebar-scroll { max-height: 35vh; }
+            .theme-item { padding: 12px; } /* Alvos maiores para dedos */
+        }
     </style>
 </head>
 <body>
@@ -76,71 +129,64 @@
     </div>
 </nav>
 
-<div class="modal fade" id="scanModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header bg-dark text-white">
-                <h5 class="modal-title fs-6">Scanner AI</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" onclick="stopScanner()"></button>
-            </div>
-            <div class="modal-body p-0 bg-black position-relative">
-                <div id="reader"></div>
-                <div id="feedbackArea" class="text-white text-center p-2 small border-top border-secondary"><span id="debugScan">Iniciando...</span></div>
-                <div id="scanResult" class="p-4 bg-body text-center" style="display:none;">
-                    <img id="resImg" src="" class="rounded mb-3" style="height: 150px; object-fit: contain;">
-                    <h5 id="resName" class="fw-bold mb-1"></h5>
-                    <div id="resStatus" class="mb-3"></div>
-                    <div class="d-flex gap-2"><button class="btn btn-outline-danger flex-fill" onclick="performAction('WANTED')">Quero</button><button class="btn btn-success flex-fill" onclick="performAction('OWNED')">Tenho</button></div>
-                    <button class="btn btn-link btn-sm mt-3" onclick="resetScanner()">Ler outro</button>
-                </div>
-            </div>
-            <div class="modal-footer bg-dark border-secondary p-2 d-block">
-                <div class="input-group input-group-sm mb-2">
-                    <label class="input-group-text bg-secondary text-white border-0"><i class="bi bi-camera-video"></i></label>
-                    <select class="form-select bg-black text-white border-secondary" id="cameraSelection"></select>
-                </div>
-                <div class="input-group input-group-sm">
-                    <input type="number" id="manualSetNum" class="form-control bg-black text-white border-secondary" placeholder="Nº do Set manual...">
-                    <button class="btn btn-primary" onclick="manualSearch()">Corrigir</button>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
 <div class="container-fluid px-4">
     <div class="row">
-        <aside class="col-md-3 col-lg-2 mb-4">
-            <form action="/" method="GET" id="filterForm">
-                <div class="mb-3">
-                    <label class="small fw-bold">Pesquisa</label>
-                    <input type="text" name="search" class="form-control form-control-sm" value="<%= query.search || '' %>" placeholder="Ex: X-Wing">
-                </div>
-                <div class="mb-3">
-                    <label class="small fw-bold">Ano</label>
-                    <select name="year" class="form-select form-select-sm">
-                        <option value="">Todos</option>
-                        <% (locals.allYears || []).forEach(y => { %>
-                            <option value="<%= y.year %>" <%= query.year == y.year ? 'selected' : '' %>><%= y.year %></option>
-                        <% }) %>
-                    </select>
-                </div>
-                <label class="small fw-bold">Temas</label>
-                <div class="sidebar-scroll border rounded p-2 bg-body-tertiary">
-                    <% (locals.allThemes || []).forEach(t => { %>
-                        <div class="form-check small">
-                            <input class="form-check-input" type="checkbox" name="themes" value="<%= t.name %>" <%= (query.themes && (Array.isArray(query.themes) ? query.themes.includes(t.name) : query.themes === t.name)) ? 'checked' : '' %>>
-                            <label class="form-check-label"><%= t.name %></label>
+        <aside class="col-md-4 col-lg-3 col-xl-2 mb-4">
+            <div class="card shadow-sm border-0 sticky-md-top" style="top: 80px; z-index: 10;">
+                <div class="card-body p-3">
+                    <form action="/" method="GET" id="filterForm">
+                        <h6 class="fw-bold mb-3"><i class="bi bi-filter-circle me-2"></i>Filtros</h6>
+                        
+                        <div class="mb-3">
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text bg-light border-end-0"><i class="bi bi-search"></i></span>
+                                <input type="text" name="search" class="form-control border-start-0" value="<%= query.search || '' %>" placeholder="Procurar set...">
+                            </div>
                         </div>
-                    <% }) %>
+
+                        <div class="mb-3">
+                            <label class="small fw-bold text-muted mb-1">Ano de Lançamento</label>
+                            <select name="year" class="form-select form-select-sm">
+                                <option value="">Todos os anos</option>
+                                <% (locals.allYears || []).forEach(y => { %>
+                                    <option value="<%= y.year %>" <%= query.year == y.year ? 'selected' : '' %>><%= y.year %></option>
+                                <% }) %>
+                            </select>
+                        </div>
+
+                        <div class="mb-2">
+                            <label class="small fw-bold text-muted mb-1">Temas</label>
+                            <div class="input-group input-group-sm mb-2">
+                                <span class="input-group-text bg-white border-end-0"><i class="bi bi-funnel small"></i></span>
+                                <input type="text" id="themeSearchInput" class="form-control border-start-0" placeholder="Filtrar lista...">
+                            </div>
+                            
+                            <div class="sidebar-scroll border bg-light" id="themeListContainer">
+                                <% (locals.allThemes || []).forEach(t => { %>
+                                    <% const isChecked = (query.themes && (Array.isArray(query.themes) ? query.themes.includes(t.name) : query.themes === t.name)); %>
+                                    <div class="theme-item <%= isChecked ? 'selected' : '' %>" onclick="toggleCheckbox(this)">
+                                        <input type="checkbox" name="themes" value="<%= t.name %>" <%= isChecked ? 'checked' : '' %> onclick="event.stopPropagation()">
+                                        <label><%= t.name %></label>
+                                    </div>
+                                <% }) %>
+                            </div>
+                        </div>
+
+                        <div class="d-grid gap-2 mt-3">
+                            <button type="submit" class="btn btn-primary btn-sm shadow-sm">
+                                <i class="bi bi-check2-circle me-1"></i>Aplicar Filtros
+                            </button>
+                            <a href="/" class="btn btn-link btn-sm text-decoration-none text-muted">Limpar tudo</a>
+                        </div>
+                        
+                        <input type="hidden" name="sort" id="sortInput" value="<%= query.sort || '' %>">
+                        <input type="hidden" name="status" value="<%= query.status || '' %>">
+                    </form>
                 </div>
-                <button type="submit" class="btn btn-primary btn-sm w-100 mt-3 shadow-sm">Aplicar Filtros</button>
-                <input type="hidden" name="sort" id="sortInput" value="<%= query.sort || '' %>">
-                <input type="hidden" name="status" value="<%= query.status || '' %>">
-            </form>
+            </div>
         </aside>
 
-        <main class="col-md-9 col-lg-10">
+        <main class="col-md-8 col-lg-9 col-xl-10">
             <div class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-2">
                 <h5 class="fw-bold mb-0">Sets (<%= pagination.totalItems %>)</h5>
                 <select class="form-select form-select-sm w-auto" onchange="document.getElementById('sortInput').value=this.value; document.getElementById('filterForm').submit()">
@@ -195,24 +241,29 @@
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-    // DARK MODE
+    // Filtro de Temas em tempo real
+    document.getElementById('themeSearchInput').addEventListener('input', function(e) {
+        const term = e.target.value.toLowerCase();
+        document.querySelectorAll('.theme-item').forEach(item => {
+            const label = item.querySelector('label').innerText.toLowerCase();
+            item.style.display = label.includes(term) ? 'flex' : 'none';
+        });
+    });
+
+    // Função para clicar no item inteiro (UX Mobile)
+    function toggleCheckbox(element) {
+        const cb = element.querySelector('input');
+        cb.checked = !cb.checked;
+        element.classList.toggle('selected', cb.checked);
+    }
+
+    // Resto dos scripts (Dark Mode, ToggleStatus, Paginação) mantém-se igual...
     const themeSwitch = document.getElementById('darkModeSwitch');
     if(themeSwitch) {
         themeSwitch.addEventListener('change', function() {
-            const isDark = this.checked;
-            document.documentElement.setAttribute('data-bs-theme', isDark ? 'dark' : 'light');
-            fetch('/api/preferences', { 
-                method: 'POST', 
-                headers: {'Content-Type': 'application/json'}, 
-                body: JSON.stringify({ dark_mode: isDark })
-            });
+            document.documentElement.setAttribute('data-bs-theme', this.checked ? 'dark' : 'light');
+            fetch('/api/preferences', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ dark_mode: this.checked })});
         });
-    }
-
-    function changePage(p) {
-        const urlParams = new URLSearchParams(window.location.search);
-        urlParams.set('page', p);
-        window.location.search = urlParams.toString();
     }
 
     async function toggleStatus(num, stat) {
@@ -220,48 +271,11 @@
         window.location.reload();
     }
 
-    // SCANNER AI
-    let html5QrCode; let lastFailedBarcode = null;
-    const scanModal = document.getElementById('scanModal');
-    if(scanModal) scanModal.addEventListener('shown.bs.modal', startScanner);
-
-    async function startScanner() {
-        const cameras = await Html5Qrcode.getCameras();
-        const camSelect = document.getElementById('cameraSelection');
-        camSelect.innerHTML = cameras.map(c => `<option value="${c.id}">${c.label}</option>`).join('');
-        camSelect.onchange = async () => { if(html5QrCode) await html5QrCode.stop(); initReader(camSelect.value); };
-        initReader(cameras[0].id);
+    function changePage(p) {
+        const urlParams = new URLSearchParams(window.location.search);
+        urlParams.set('page', p);
+        window.location.search = urlParams.toString();
     }
-
-    function initReader(id) {
-        html5QrCode = new Html5Qrcode("reader");
-        html5QrCode.start(id, { fps: 10, qrbox: 250 }, async (txt) => {
-            html5QrCode.pause();
-            document.getElementById('debugScan').innerText = "Lido: " + txt;
-            await searchSet(txt, false);
-        });
-    }
-
-    async function searchSet(query, isManual) {
-        const res = await fetch(`/api/scan?code=${query}`);
-        const data = await res.json();
-        if (data.found) {
-            document.getElementById('scanResult').style.display = 'block';
-            document.getElementById('reader').style.display = 'none';
-            document.getElementById('resImg').src = data.set.img_url;
-            document.getElementById('resName').innerText = data.set.name;
-            window.currentSetNum = data.set.set_num;
-            if(isManual && lastFailedBarcode) fetch('/api/scan/associate', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ barcode: lastFailedBarcode, set_num: data.set.set_num })});
-        } else {
-            lastFailedBarcode = query;
-            alert("Não encontrado. Insira o nº manual.");
-            if(html5QrCode) html5QrCode.resume();
-        }
-    }
-
-    async function stopScanner() { if(html5QrCode) await html5QrCode.stop(); }
-    function resetScanner() { document.getElementById('scanResult').style.display = 'none'; document.getElementById('reader').style.display = 'block'; if(html5QrCode) html5QrCode.resume(); }
-    async function performAction(s) { if(window.currentSetNum) { await toggleStatus(window.currentSetNum, s); } }
 </script>
 </body>
 </html>
