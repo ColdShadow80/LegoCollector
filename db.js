@@ -2,18 +2,18 @@ const sqlite3 = require('sqlite3').verbose();
 const db = new sqlite3.Database('./lego.db');
 
 const MIGRATIONS = [
-    // V1...
+    // V1
     `CREATE TABLE IF NOT EXISTS sets (set_num TEXT PRIMARY KEY, name TEXT, year INTEGER, theme_id INTEGER, num_parts INTEGER, img_url TEXT, eol_status TEXT DEFAULT 'Active', eol_date TEXT, price_eur REAL, owned INTEGER DEFAULT 0);
     CREATE TABLE IF NOT EXISTS themes (id INTEGER PRIMARY KEY, name TEXT, parent_id INTEGER);`,
-    // V2...
+    // V2
     `CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT UNIQUE, password TEXT, name TEXT, google_id TEXT UNIQUE);
     CREATE TABLE IF NOT EXISTS user_sets (user_id INTEGER, set_num TEXT, date_added DATETIME DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (user_id, set_num), FOREIGN KEY(user_id) REFERENCES users(id), FOREIGN KEY(set_num) REFERENCES sets(set_num));
     CREATE TABLE IF NOT EXISTS schema_version (version INTEGER);`,
-    // V3...
+    // V3
     `ALTER TABLE users ADD COLUMN dark_mode INTEGER DEFAULT 0; ALTER TABLE users ADD COLUMN items_per_page INTEGER DEFAULT 25;`,
-    // V4...
+    // V4
     `ALTER TABLE users ADD COLUMN is_verified INTEGER DEFAULT 0; ALTER TABLE users ADD COLUMN verify_token TEXT; ALTER TABLE users ADD COLUMN reset_token TEXT; ALTER TABLE users ADD COLUMN reset_expires INTEGER;`,
-    // V5...
+    // V5
     `ALTER TABLE themes ADD COLUMN is_hidden INTEGER DEFAULT 0; ALTER TABLE themes ADD COLUMN ignore_parts INTEGER DEFAULT 0; ALTER TABLE users ADD COLUMN last_login DATETIME;`,
     
     // V6: CONTROLO INDIVIDUAL DE SETS (NOVO)
