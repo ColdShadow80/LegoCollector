@@ -106,12 +106,11 @@ function buildFilters(query, userId, isAdminView = false) {
     return { whereClause, params };
 }
 
-// --- ROTA DASHBOARD (FINANCEIRO) ---
+// --- ROTA DASHBOARD (Calcula Custo vs PVP) ---
 app.get('/dashboard', (req, res) => {
     if (!req.user) return res.redirect('/login');
     const userId = req.user.id;
 
-    // 1. ESTATÍSTICAS GERAIS (INCLUINDO PVP vs CUSTO)
     const q1 = new Promise(r => db.get(`
         SELECT 
             COUNT(*) as total_sets, 
@@ -172,7 +171,7 @@ app.get('/', (req, res) => {
     });
 });
 
-// --- ROTA DETALHE SET ---
+// --- ROTA DETALHE ---
 app.get('/set/:set_num', (req, res) => {
     const userId = req.user ? req.user.id : null;
     const { set_num } = req.params;
@@ -206,7 +205,7 @@ app.post('/api/toggle', (req, res) => {
     }
 });
 
-// API UPDATE: Atualiza CUSTO (User) e PVP (Set Global)
+// API UPDATE V10: Recebe PVP (price_eur) e Custo (purchase_price)
 app.post('/api/user_set/update', (req, res) => {
     if (!req.user) return res.status(401).send();
     const { set_num, build_status, location, purchase_price, price_eur } = req.body;
