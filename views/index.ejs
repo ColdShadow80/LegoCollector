@@ -32,10 +32,10 @@
             border: 2px solid #198754 !important; 
         }
         [data-bs-theme="dark"] .card.is-owned { 
-            background-color: #1a2e22; /* Verde muito escuro */
+            background-color: #1a2e22; 
         }
         [data-bs-theme="light"] .card.is-owned { 
-            background-color: #f0fff4; /* Verde muito claro */
+            background-color: #f0fff4; 
         }
 
         /* Destaque para Sets "WANTED" (Desejados) */
@@ -343,7 +343,6 @@
         function onScanSuccess(decodedText, decodedResult) {
             // Redireciona para pesquisa com o código lido
             window.location.href = `/?q=${decodedText}`;
-            // Nota: Se tiver rota de API específica para barcode, altere aqui.
         }
     </script>
 </body>
