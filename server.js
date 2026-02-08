@@ -261,6 +261,107 @@ app.get('/', (req, res) => {
     });
 });
 
+// --- ROTA: Guardar Preferências (Dark Mode / Paginação) ---
+app.post('/api/preferences', (req, res) => {
+    if (!req.user) return res.status(401).send();
+    
+    const { dark_mode, items_per_page } = req.body;
+    let sql = "", params = [];
+
+    if (dark_mode !== undefined) {
+        sql = "UPDATE users SET dark_mode = ? WHERE id = ?";
+        params = [dark_mode ? 1 : 0, req.user.id];
+        req.user.dark_mode = dark_mode ? 1 : 0; // Atualiza sessão
+    } 
+    else if (items_per_page !== undefined) {
+        sql = "UPDATE users SET items_per_page = ? WHERE id = ?";
+        params = [items_per_page, req.user.id];
+        req.user.items_per_page = items_per_page; // Atualiza sessão
+    }
+
+    if (sql) {
+        db.run(sql, params, (err) => {
+            if (err) console.error(err);
+            res.json({ success: true });
+        });
+    } else {
+        res.json({ success: false });
+    }
+});
+
+// --- ROTAS DE ADMINISTRAÇÃO ---
+
+// 1. Listar Utilizadores
+app.get('/admin/users', ensureAdmin, (req, res) => {
+    const sortParam = req.query.sort || 'id';
+    let orderBy = 'id ASC';
+    
+    if (sortParam === 'name') orderBy = 'name ASC';
+    if (sortParam === 'login') orderBy = 'last_login DESC';
+
+    db.all(`SELECT * FROM users ORDER BY ${orderBy}`, [], (err, rows) => {
+        if (err) return res.status(500).send("Erro de BD");
+        res.render('admin/users', { 
+            user: req.user, 
+            users: rows, 
+            sort: sortParam 
+        });
+    });
+});
+
+// 2. Reset de Password (chamado pelo admin/users.ejs)
+app.post('/admin/users/reset', ensureAdmin, express.json(), async (req, res) => {
+    const { user_id, type } = req.body;
+    const token = crypto.randomBytes(32).toString('hex');
+    const expire = Date.now() + 3600000; // 1 hora
+
+    db.run("UPDATE users SET reset_token = ?, reset_expires = ? WHERE id = ?", 
+        [token, expire, user_id], 
+        async function(err) {
+            if (err) return res.json({ error: "Erro na BD" });
+
+            // Recuperar email do utilizador alvo
+            db.get("SELECT email FROM users WHERE id = ?", [user_id], async (e, targetUser) => {
+                if (!targetUser) return res.json({ error: "Utilizador não encontrado" });
+
+                const link = `http://${req.headers.host}/reset/${token}`;
+
+                if (type === 'email') {
+                    await sendEmail(targetUser.email, "Reset de Password (Admin)", 
+                        `O administrador solicitou um reset de password.\nClique aqui: ${link}`);
+                    res.json({ success: true });
+                } else {
+                    res.json({ success: true, link: link });
+                }
+            });
+        }
+    );
+});
+
+// Rotas para Sets e Temas (para os links do menu funcionarem)
+app.get('/admin/sets', ensureAdmin, (req, res) => {
+    // Paginação simples para sets
+    const page = parseInt(req.query.page) || 1;
+    const limit = 50;
+    const offset = (page - 1) * limit;
+
+    db.all("SELECT * FROM sets LIMIT ? OFFSET ?", [limit, offset], (err, rows) => {
+        db.get("SELECT COUNT(*) as count FROM sets", (e, c) => {
+            res.render('admin/sets', { 
+                sets: rows, 
+                pagination: { page, totalPages: Math.ceil(c.count / limit) } 
+            });
+        });
+    });
+});
+
+app.get('/admin/themes', ensureAdmin, (req, res) => {
+    db.all(`SELECT t.*, (SELECT COUNT(*) FROM sets WHERE theme_id = t.id) as total_sets 
+            FROM themes t ORDER BY t.id`, [], (err, rows) => {
+        res.render('admin/themes', { themes: rows });
+    });
+});
+
 app.get('/set/:set_num', (req, res) => { const userId = req.user ? req.user.id : null; const { set_num } = req.params; const sql = `SELECT sets.*, themes.name as theme_name, user_sets.status as user_status, user_sets.quantity, user_sets.date_added, user_sets.build_status, user_sets.location, user_sets.purchase_price, sets.price_eur FROM sets LEFT JOIN themes ON sets.theme_id = themes.id LEFT JOIN user_sets ON sets.set_num = user_sets.set_num AND user_sets.user_id = ? WHERE sets.set_num = ?`; db.get(sql, [userId, set_num], (err, set) => { if (err || !set) return res.status(404).render('index', { error: 'Set não encontrado', sets:[], allThemes:[], allYears:[], query:{}, pagination:{}, user: req.user }); set.rb_url = `https://rebrickable.com/sets/${set.set_num}`; res.render('set_detail', { set, user: req.user }); }); });
 app.post('/api/toggle', (req, res) => { if (!req.user) return res.status(401).send(); const { set_num, status } = req.body; if (status === 'REMOVE') db.run("DELETE FROM user_sets WHERE user_id=? AND set_num=?", [req.user.id, set_num], () => res.json({ok: true, status: null})); else { const sql = `INSERT INTO user_sets (user_id, set_num, status, quantity, build_status) VALUES (?, ?, ?, 1, 'Montado') ON CONFLICT(user_id, set_num) DO UPDATE SET status = excluded.status`; db.run(sql, [req.user.id, set_num, status], () => res.json({ok: true, status: status})); } });
 app.post('/api/user_set/update', (req, res) => { if (!req.user) return res.status(401).send(); const { set_num, build_status, location, purchase_price, price_eur } = req.body; db.run("UPDATE user_sets SET build_status = ?, location = ?, purchase_price = ? WHERE user_id = ? AND set_num = ?", [build_status, location, purchase_price || 0, req.user.id, set_num], (err) => { if (err) return res.status(500).json({error: err.message}); if (price_eur !== undefined) db.run("UPDATE sets SET price_eur = ? WHERE set_num = ?", [price_eur || 0, set_num], () => res.json({success: true})); else res.json({success: true}); }); });
