@@ -1,58 +1,48 @@
 <!DOCTYPE html>
-<html lang="pt" data-bs-theme="<%= user.dark_mode ? 'dark' : 'light' %>">
+<html lang="pt">
 <head>
     <meta charset="UTF-8">
-    <title>Gestão de Temas - Admin</title>
+    <title>Admin Temas</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
-<body class="p-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h3>🛠️ Gestão de Temas</h3>
-        <a href="/" class="btn btn-outline-secondary">Voltar ao Site</a>
-    </div>
-
-    <input type="text" id="searchTheme" class="form-control mb-3" placeholder="Filtrar temas...">
-
-    <div class="table-responsive" style="max-height: 80vh; overflow-y: auto;">
-        <table class="table table-sm table-hover table-bordered">
-            <thead class="table-light sticky-top">
+<body class="bg-light">
+    <nav class="navbar navbar-dark bg-dark mb-4 px-3">
+        <a class="navbar-brand" href="/">Admin Painel</a>
+        <a href="/" class="btn btn-outline-light btn-sm">Voltar ao Site</a>
+    </nav>
+    <div class="container">
+        <h3>Gerir Temas</h3>
+        <table class="table table-striped bg-white shadow-sm rounded">
+            <thead>
                 <tr>
+                    <th>ID</th>
                     <th>Nome</th>
-                    <th>Anos</th>
-                    <th class="text-center">Total Sets</th>
-                    <th class="text-center">Sets (0 Pçs)</th>
-                    <th class="text-center bg-warning-subtle">Ocultar do Site</th>
-                    <th class="text-center bg-danger-subtle">Ignorar Peças (Sync)</th>
+                    <th>Sets</th>
+                    <th>Esconder?</th>
                 </tr>
             </thead>
-            <tbody id="themeTable">
+            <tbody>
                 <% themes.forEach(t => { %>
-                    <tr>
-                        <td><%= t.name %></td>
-                        <td class="small text-muted"><%= t.min_year %> - <%= t.max_year %></td>
-                        <td class="text-center"><%= t.total_sets %></td>
-                        <td class="text-center <%= t.zero_part_sets > 0 ? 'text-danger fw-bold' : '' %>"><%= t.zero_part_sets %></td>
-                        <td class="text-center">
-                            <input type="checkbox" class="form-check-input" <%= t.is_hidden ? 'checked' : '' %> onchange="toggleTheme(<%= t.id %>, 'is_hidden', this.checked)">
-                        </td>
-                        <td class="text-center">
-                            <input type="checkbox" class="form-check-input" <%= t.ignore_parts ? 'checked' : '' %> onchange="toggleTheme(<%= t.id %>, 'ignore_parts', this.checked)">
-                        </td>
-                    </tr>
+                <tr>
+                    <td><%= t.id %></td>
+                    <td><%= t.name %></td>
+                    <td><%= t.total_sets %></td>
+                    <td>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" onchange="toggle(<%= t.id %>, 'is_hidden', this.checked)" <%= t.is_hidden ? 'checked' : '' %>>
+                        </div>
+                    </td>
+                </tr>
                 <% }) %>
             </tbody>
         </table>
     </div>
-
     <script>
-        document.getElementById('searchTheme').addEventListener('keyup', function(e) {
-            const term = e.target.value.toLowerCase();
-            document.querySelectorAll('#themeTable tr').forEach(row => {
-                row.style.display = row.cells[0].textContent.toLowerCase().includes(term) ? '' : 'none';
+        async function toggle(id, field, val) {
+            await fetch('/admin/themes/toggle', {
+                method: 'POST', headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({ theme_id: id, field: field, value: val })
             });
-        });
-        async function toggleTheme(id, field, value) {
-            try { await fetch('/admin/themes/toggle', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ theme_id: id, field, value })}); } catch(e) { alert('Erro'); }
         }
     </script>
 </body>

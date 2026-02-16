@@ -71,3 +71,7 @@ pm2 startup
 pm2 save
 ```
 
+Obter a API Key do Brickset
+Cria conta em Brickset.com.
+
+Vai a Brickset API Request e pede uma chave.
