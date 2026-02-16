@@ -281,6 +281,29 @@ app.post('/api/preferences', (req, res) => {
     res.json({ success: true });
 });
 
+// --- BARCODE LOOKUP / TEACH ENDPOINTS ---
+// Lookup barcode mapping
+app.get('/api/barcode/:code', (req, res) => {
+    const code = req.params.code;
+    db.get("SELECT set_num FROM barcodes WHERE code = ?", [code], (err, row) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!row) return res.status(404).json({ found: false });
+        res.json({ found: true, set_num: row.set_num });
+    });
+});
+
+// Teach mapping (requires logged-in user)
+app.post('/api/barcode/teach', (req, res) => {
+    if (!req.user) return res.status(401).json({ error: 'unauthenticated' });
+    const { code, set_num } = req.body;
+    if (!code || !set_num) return res.status(400).json({ error: 'missing_parameters' });
+
+    db.run("INSERT OR REPLACE INTO barcodes (code, set_num) VALUES (?, ?)", [code, set_num], function(err) {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ success: true });
+    });
+});
+
 // --- ROTAS DE ADMINISTRAÇÃO ---
 
 app.get('/admin/users', ensureAdmin, (req, res) => {
