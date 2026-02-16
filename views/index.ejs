@@ -100,7 +100,8 @@
                                 <input class="form-check-input" type="checkbox" name="themes" value="<%= t.name %>" id="t-<%= t.name %>"
                                 <% if (query.themes && (query.themes === t.name || (Array.isArray(query.themes) && query.themes.includes(t.name)))) { %> checked <% } %>>
                                 <label class="form-check-label small lh-sm" for="t-<%= t.name %>">
-                                    <span class="d-block text-truncate label-text" style="max-width: 180px;"><%= t.name %></span>
+                                    <span class="text-truncate label-text" style="max-width: 140px; display: inline-block; vertical-align: middle;" title="<%= t.name %>"><%= t.name %></span>
+                                    <span class="text-muted ms-1" style="font-size: 0.75em; vertical-align: middle;"><% if (t.min_year) { %>(<%= t.min_year %><%= t.min_year !== t.max_year ? ' - ' + t.max_year : '' %>)<% } %></span>
                                 </label>
                             </div>
                         <% }) %>
