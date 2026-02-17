@@ -617,6 +617,95 @@ app.post('/admin/sets/update', ensureAdmin, express.json(), (req, res) => {
     db.run(`UPDATE sets SET ${updates.join(', ')} WHERE set_num = ?`, params, function(err) { if (err) return res.status(500).json({ error: err.message }); res.json({ success: true }); });
 });
 
+// Admin Barcodes Management Page
+app.get('/admin/barcodes', ensureAdmin, (req, res) => {
+    const page = parseInt(req.query.page) || 1;
+    const limit = 50;
+    const offset = (page - 1) * limit;
+    const filterTheme = req.query.theme || '';
+    const filterSet = req.query.set || '';
+    const filterBarcode = req.query.barcode || '';
+    const sortBy = req.query.sort || 'barcode_asc';
+    
+    // Build WHERE clause
+    let whereClauses = [];
+    let params = [];
+    if (filterTheme) {
+        whereClauses.push('t.id = ?');
+        params.push(parseInt(filterTheme));
+    }
+    if (filterSet) {
+        whereClauses.push("s.set_num LIKE ?");
+        params.push(`%${filterSet}%`);
+    }
+    if (filterBarcode) {
+        whereClauses.push("b.code LIKE ?");
+        params.push(`%${filterBarcode}%`);
+    }
+    const whereClause = whereClauses.length > 0 ? 'WHERE ' + whereClauses.join(' AND ') : '';
+    
+    // Build ORDER BY clause
+    let orderClause = 'ORDER BY b.code ASC';
+    if (sortBy === 'barcode_asc') orderClause = 'ORDER BY b.code ASC';
+    else if (sortBy === 'barcode_desc') orderClause = 'ORDER BY b.code DESC';
+    else if (sortBy === 'theme_asc') orderClause = 'ORDER BY t.name ASC, s.set_num ASC';
+    else if (sortBy === 'theme_desc') orderClause = 'ORDER BY t.name DESC, s.set_num ASC';
+    else if (sortBy === 'set_asc') orderClause = 'ORDER BY s.set_num ASC';
+    else if (sortBy === 'set_desc') orderClause = 'ORDER BY s.set_num DESC';
+    
+    // Count total barcodes
+    const countSql = `SELECT COUNT(*) as total FROM barcodes b 
+                      LEFT JOIN sets s ON b.set_num = s.set_num 
+                      LEFT JOIN themes t ON s.theme_id = t.id ${whereClause}`;
+    db.get(countSql, params, (err, countRow) => {
+        if (err) {
+            console.error('Error counting barcodes:', err);
+            return res.status(500).send('Erro ao contar códigos de barras');
+        }
+        
+        const totalBarcodes = countRow ? countRow.total : 0;
+        const totalPages = Math.ceil(totalBarcodes / limit);
+        
+        // Get paginated barcodes
+        const sql = `SELECT b.code, b.set_num, s.name as set_name, s.theme_id, s.year, s.num_parts, t.id as theme_id, t.name as theme_name
+                     FROM barcodes b 
+                     LEFT JOIN sets s ON b.set_num = s.set_num 
+                     LEFT JOIN themes t ON s.theme_id = t.id 
+                     ${whereClause} ${orderClause} LIMIT ? OFFSET ?`;
+        
+        const queryParams = [...params, limit, offset];
+        db.all(sql, queryParams, (err, barcodes) => {
+            if (err) {
+                console.error('Error fetching barcodes:', err);
+                return res.status(500).send('Erro ao carregar códigos de barras');
+            }
+            
+            // Get all themes for filter dropdown
+            db.all("SELECT id, name FROM themes ORDER BY name", [], (err, themes) => {
+                if (err) themes = [];
+                
+                res.render('admin/barcodes', {
+                    barcodes: barcodes,
+                    themes: themes,
+                    pagination: { page, totalPages, limit, totalBarcodes },
+                    filters: { theme: filterTheme, set: filterSet, barcode: filterBarcode, sort: sortBy }
+                });
+            });
+        });
+    });
+});
+
+// Delete barcode entry
+app.post('/admin/barcodes/delete', ensureAdmin, express.json(), (req, res) => {
+    const { code } = req.body;
+    if (!code) return res.status(400).json({ error: 'missing_code' });
+    
+    db.run("DELETE FROM barcodes WHERE code = ?", [code], function(err) {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ success: true });
+    });
+});
+
 app.get('/admin/themes', ensureAdmin, (req, res) => {
     db.all(`SELECT t.*, (SELECT COUNT(*) FROM sets WHERE theme_id = t.id) as total_sets, (SELECT MIN(year) FROM sets WHERE theme_id = t.id) as min_year, (SELECT MAX(year) FROM sets WHERE theme_id = t.id) as max_year FROM themes t ORDER BY t.name`, [], (err, rows) => {
         if (err) return res.status(500).send('Erro Temas');
