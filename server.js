@@ -48,7 +48,10 @@ const cache = {
 
 // Configuração do EJS e Pasta Pública
 app.set('view engine', 'ejs');
-app.use(express.static('public'));
+app.use(express.static('public', { 
+    maxAge: '1d',  // Cache static files for 1 day
+    etag: false    // Disable ETag for better cache performance
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
@@ -182,8 +185,14 @@ function ensureAdmin(req, res, next) {
 
 // --- ROTAS PRINCIPAIS ---
 
+// Cache headers middleware for homepage (5 minute cache)
+const setCacheHeaders = (req, res, next) => {
+    res.set('Cache-Control', 'private, max-age=300'); // 5 minute cache
+    next();
+};
+
 // 1. HOMEPAGE (Com a correção dos filtros)
-app.get('/', (req, res) => {
+app.get('/', setCacheHeaders, (req, res) => {
     const filterSearch = req.query.q || '';
     const filterThemes = req.query.themes || '';
     const filterYear = req.query.year || '';

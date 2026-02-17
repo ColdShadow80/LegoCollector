@@ -428,23 +428,31 @@
             }
         }
     })();
-    // Desktop theme search
+    
+    // Debounced theme search (prevents excessive DOM updates on every keypress)
+    let desktopSearchTimeout;
     document.getElementById('themeSearchInput')?.addEventListener('keyup', function(e) {
-        const term = e.target.value.toLowerCase();
-        document.querySelectorAll('.theme-item').forEach(item => {
-            const text = item.querySelector('.label-text').textContent.toLowerCase();
-            item.style.display = text.includes(term) ? '' : 'none';
-        });
+        clearTimeout(desktopSearchTimeout);
+        desktopSearchTimeout = setTimeout(() => {
+            const term = e.target.value.toLowerCase();
+            document.querySelectorAll('.theme-item').forEach(item => {
+                const text = item.querySelector('.label-text').textContent.toLowerCase();
+                item.style.display = text.includes(term) ? '' : 'none';
+            });
+        }, 150); // 150ms debounce delay
     });
 
-    // Mobile theme search (accordion)
+    // Debounced mobile theme search (accordion)
+    let mobileSearchTimeout;
     document.getElementById('themeSearchInputMobile')?.addEventListener('keyup', function(e) {
-        const term = e.target.value.toLowerCase();
-        document.querySelectorAll('.theme-item-mobile').forEach(item => {
-            const text = item.querySelector('.label-text').textContent.toLowerCase();
-            item.style.display = text.includes(term) ? '' : 'none';
-        });
-    });
+        clearTimeout(mobileSearchTimeout);
+        mobileSearchTimeout = setTimeout(() => {
+            const term = e.target.value.toLowerCase();
+            document.querySelectorAll('.theme-item-mobile').forEach(item => {
+                const text = item.querySelector('.label-text').textContent.toLowerCase();
+                item.style.display = text.includes(term) ? '' : 'none';
+            });
+        }, 150); // 150ms debounce delay
 
     function changeLimit(val) { 
         // Update both hidden inputs and visible selects
