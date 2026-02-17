@@ -177,7 +177,7 @@ app.get('/', (req, res) => {
     if (req.query.limit) {
         const paramLimit = req.query.limit;
         if (paramLimit === 'all') {
-            limit = 10000; // arbitrariamente grande
+            limit = 999999; // arbitrariamente grande
         } else {
             const parsed = parseInt(paramLimit);
             if ([25, 50, 100].includes(parsed)) {
@@ -186,7 +186,17 @@ app.get('/', (req, res) => {
         }
         console.log('  limit (from query):', limit);
     } else if (req.user && req.user.items_per_page) {
-        limit = req.user.items_per_page;
+        const userPref = req.user.items_per_page;
+        if (userPref === 'all') {
+            limit = 999999;
+        } else {
+            const parsed = parseInt(userPref);
+            if ([25, 50, 100].includes(parsed)) {
+                limit = parsed;
+            } else {
+                limit = 24; // default if invalid value
+            }
+        }
         console.log('  limit (from user pref):', limit);
     }
     
