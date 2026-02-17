@@ -80,7 +80,7 @@
                 </div>
                 <div class="mb-3">
                     <label class="small fw-bold">Pesquisa</label>
-                    <input type="text" name="search" class="form-control form-control-sm" value="<%= query.search || '' %>">
+                    <input type="text" name="q" class="form-control form-control-sm" value="<%= query.search || '' %>">
                 </div>
                 <div class="mb-3">
                     <label class="small fw-bold">Ano</label>
@@ -97,9 +97,9 @@
                     <div class="sidebar-scroll border rounded p-2 bg-body-tertiary" id="themeListContainer">
                         <% allThemes.forEach(t => { %>
                             <div class="form-check mb-1 theme-item">
-                                <input class="form-check-input" type="checkbox" name="themes" value="<%= t.name %>" id="t-<%= t.name %>"
-                                <% if (query.themes && (query.themes === t.name || (Array.isArray(query.themes) && query.themes.includes(t.name)))) { %> checked <% } %>>
-                                <label class="form-check-label small lh-sm" for="t-<%= t.name %>">
+                                <input class="form-check-input" type="checkbox" name="themes" value="<%= t.id %>" id="t-<%= t.id %>"
+                                <% if (query.themes && (query.themes == t.id || (Array.isArray(query.themes) && query.themes.includes(String(t.id))))) { %> checked <% } %>>
+                                <label class="form-check-label small lh-sm" for="t-<%= t.id %>">
                                     <span class="d-block text-truncate label-text" style="max-width: 180px;"><%= t.name %></span>
                                 </label>
                             </div>
@@ -152,7 +152,7 @@
                                 <span class="fw-bold text-primary">#<%= set.set_num %></span> • <%= set.year %> • <%= set.num_parts %> pçs
                             </div>
                             <div class="mt-auto card-actions d-flex justify-content-center gap-2">
-                                <a href="/set/<%= set.set_num %>" class="btn btn-outline-secondary" title="Ver Detalhes"><i class="bi bi-eye"></i></a>
+                                <a href="/set/<%= encodeURIComponent(set.set_num) %>" class="btn btn-outline-secondary" title="Ver Detalhes"><i class="bi bi-eye"></i></a>
                                 
                                 <% if (user) { %>
                                     <button class="btn <%= set.user_status === 'WANTED' ? 'btn-danger' : 'btn-outline-danger' %>" 

@@ -132,7 +132,7 @@ function ensureAdmin(req, res, next) {
 // 1. HOMEPAGE (Com a correção dos filtros)
 app.get('/', (req, res) => {
     const filterSearch = req.query.q || '';
-    const filterTheme = req.query.theme || '';
+    const filterThemes = req.query.themes || '';
     const filterYear = req.query.year || '';
     const filterSort = req.query.sort || 'newest';
     const page = parseInt(req.query.page) || 1;
@@ -159,9 +159,15 @@ app.get('/', (req, res) => {
         sql += " AND (s.name LIKE ? OR s.set_num LIKE ?)";
         params.push(`%${filterSearch}%`, `%${filterSearch}%`);
     }
-    if (filterTheme) {
-        sql += " AND s.theme_id = ?";
-        params.push(filterTheme);
+    if (filterThemes) {
+        if (Array.isArray(filterThemes)) {
+            const placeholders = filterThemes.map(() => '?').join(',');
+            sql += ` AND s.theme_id IN (${placeholders})`;
+            params.push(...filterThemes.map(t => parseInt(t)));
+        } else {
+            sql += " AND s.theme_id = ?";
+            params.push(parseInt(filterThemes));
+        }
     }
     if (filterYear) {
         sql += " AND s.year = ?";
@@ -181,7 +187,15 @@ app.get('/', (req, res) => {
         let countSql = `SELECT COUNT(*) as total FROM sets s WHERE 1=1`;
         let countParams = [];
         if (filterSearch) { countSql += " AND (s.name LIKE ? OR s.set_num LIKE ?)"; countParams.push(`%${filterSearch}%`, `%${filterSearch}%`); }
-        if (filterTheme) { countSql += " AND s.theme_id = ?"; countParams.push(filterTheme); }
+        if (filterThemes) {
+            if (Array.isArray(filterThemes)) {
+                const placeholders = filterThemes.map(() => '?').join(',');
+                countSql += ` AND s.theme_id IN (${placeholders})`;
+                countParams.push(...filterThemes.map(t => parseInt(t)));
+            } else {
+                countSql += " AND s.theme_id = ?"; countParams.push(parseInt(filterThemes));
+            }
+        }
         if (filterYear) { countSql += " AND s.year = ?"; countParams.push(filterYear); }
 
         db.get(countSql, countParams, (e, countRow) => {
@@ -211,7 +225,7 @@ app.get('/', (req, res) => {
                         allYears: allYears || [],
                         query: {
                             search: filterSearch,
-                            theme: filterTheme,
+                            theme: filterThemes,
                             year: filterYear,
                             sort: filterSort,
                             status: req.query.status || '',
@@ -220,7 +234,7 @@ app.get('/', (req, res) => {
                         pagination: { page, totalPages, limit, totalItems: totalSets },
                         filters: { // keep compatibility with newer code
                             search: filterSearch,
-                            theme: filterTheme,
+                            theme: filterThemes,
                             year: filterYear,
                             sort: filterSort
                         }
@@ -380,6 +394,47 @@ app.get('/logout', (req, res, next) => {
         if (err) return next(err);
         res.redirect('/');
     });
+});
+
+// --- SET DETAIL ---
+app.get('/set/:set_num', (req, res) => {
+    const setNum = req.params.set_num;
+    db.get("SELECT s.*, t.name as theme_name FROM sets s LEFT JOIN themes t ON s.theme_id = t.id WHERE s.set_num = ?", [setNum], (err, set) => {
+        if (err) return res.status(500).send('Erro BD');
+        if (!set) return res.status(404).send('Set não encontrado');
+
+        if (!req.user) {
+            return res.render('set_detail', { set, user: null });
+        }
+
+        db.get("SELECT * FROM user_sets WHERE user_id = ? AND set_num = ?", [req.user.id, set.set_num], (e, us) => {
+            if (us) {
+                set.user_status = us.status;
+                set.location = us.location;
+                set.build_status = us.build_status;
+                set.purchase_price = us.purchase_price;
+                set.quantity = us.quantity;
+            } else {
+                set.user_status = null;
+            }
+            res.render('set_detail', { set, user: req.user });
+        });
+    });
+});
+
+// Update user-set details (from set_detail page)
+app.post('/api/user_set/update', (req, res) => {
+    if (!req.user) return res.status(401).json({ error: 'unauthenticated' });
+    const { set_num, build_status, location, purchase_price, price_eur, quantity } = req.body;
+    const qty = quantity ? parseInt(quantity) : 1;
+
+    db.run(`INSERT INTO user_sets (user_id, set_num, quantity, status, location, build_status, purchase_price) VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(user_id, set_num) DO UPDATE SET quantity = excluded.quantity, status = excluded.status, location = excluded.location, build_status = excluded.build_status, purchase_price = excluded.purchase_price`,
+        [req.user.id, set_num, qty, 'OWNED', location || null, build_status || null, purchase_price || null], function(err) {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ success: true });
+        }
+    );
 });
 
 // Iniciar Servidor
