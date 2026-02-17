@@ -6,6 +6,7 @@
     <title>LegoTracker V7</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
     <style>
         body { transition: background-color 0.3s, color 0.3s; }
         .set-card img { height: 160px; object-fit: contain; padding: 5px; transition: transform 0.2s; }
@@ -35,6 +36,11 @@
         
         <div class="d-flex align-items-center gap-3">
             <% if (user) { %>
+                <div class="nav-item">
+                    <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#scannerModal" title="Abrir Scanner">
+                        <i class="bi bi-upc-scan"></i>
+                    </button>
+                </div>
                 <div class="form-check form-switch pt-1">
                     <input class="form-check-input" type="checkbox" id="darkModeSwitch" <%= user.dark_mode ? 'checked' : '' %>>
                     <label class="form-check-label"><i class="bi bi-moon-stars"></i></label>
@@ -99,8 +105,11 @@
                             <div class="form-check mb-1 theme-item">
                                 <input class="form-check-input" type="checkbox" name="themes" value="<%= t.id %>" id="t-<%= t.id %>"
                                 <% if (query.themes && (query.themes == t.id || (Array.isArray(query.themes) && query.themes.includes(String(t.id))))) { %> checked <% } %>>
-                                <label class="form-check-label small lh-sm" for="t-<%= t.id %>">
-                                    <span class="d-block text-truncate label-text" style="max-width: 180px;"><%= t.name %></span>
+                                <label class="form-check-label small lh-sm d-flex justify-content-between align-items-center" for="t-<%= t.id %>">
+                                    <span class="d-block text-truncate label-text" style="max-width: 140px;"><%= t.name %></span>
+                                    <% if (t.min_year) { %>
+                                        <small class="text-muted ms-2">(<%= t.min_year %><%= t.min_year !== t.max_year ? ' - ' + t.max_year : '' %>)</small>
+                                    <% } %>
                                 </label>
                             </div>
                         <% }) %>
@@ -192,8 +201,51 @@
     </div>
 </div>
 
+            <!-- Scanner Modal -->
+            <div class="modal fade" id="scannerModal" tabindex="-1">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Scanner de Código de Barras</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body text-center">
+                            <div id="reader" style="width: 100%;"></div>
+                            <p class="mt-2 text-muted small">Aponte a câmera para o código de barras da caixa.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
+    // Scanner integration (uses html5-qrcode)
+    (function() {
+        const scannerModal = document.getElementById('scannerModal');
+        let html5QrcodeScanner = null;
+
+        if (scannerModal) {
+            scannerModal.addEventListener('shown.bs.modal', () => {
+                if (!html5QrcodeScanner) {
+                    html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
+                    html5QrcodeScanner.render(onScanSuccess);
+                }
+            });
+
+            scannerModal.addEventListener('hidden.bs.modal', () => {
+                if (html5QrcodeScanner) {
+                    try { html5QrcodeScanner.clear(); } catch(e){}
+                    html5QrcodeScanner = null;
+                    document.getElementById('reader').innerHTML = '';
+                }
+            });
+        }
+
+        function onScanSuccess(decodedText, decodedResult) {
+            // Redirect to search with decoded text
+            window.location.href = `/?q=${encodeURIComponent(decodedText)}`;
+        }
+    })();
     document.getElementById('themeSearchInput').addEventListener('keyup', function(e) {
         const term = e.target.value.toLowerCase();
         document.querySelectorAll('.theme-item').forEach(item => {

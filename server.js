@@ -180,7 +180,7 @@ app.get('/', (req, res) => {
     else sql += " ORDER BY s.year DESC, s.set_num DESC"; 
 
     // Executar Queries
-    db.all("SELECT id, name, (SELECT COUNT(*) FROM sets WHERE theme_id = themes.id) as count FROM themes ORDER BY name", [], (err, themes) => {
+    db.all("SELECT id, name, (SELECT COUNT(*) FROM sets WHERE theme_id = themes.id) as count, (SELECT MIN(year) FROM sets WHERE theme_id = themes.id) as min_year, (SELECT MAX(year) FROM sets WHERE theme_id = themes.id) as max_year FROM themes ORDER BY name", [], (err, themes) => {
         if(err) return res.status(500).send("Erro Temas");
 
         // Contagem Total
