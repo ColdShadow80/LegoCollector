@@ -139,7 +139,7 @@
         <div class="col-md-9 col-lg-10">
             <div class="d-flex justify-content-between align-items-center mb-3">
                 <span class="text-muted small"><%= pagination.totalItems %> sets</span>
-                <select class="form-select form-select-sm" style="width: 80px;" onchange="changeLimit(this.value)">
+                <select id="limitSelect" class="form-select form-select-sm" style="width: 80px;" onchange="changeLimit(this.value)">
                     <option value="25" <%= pagination.limit == 25 ? 'selected' : '' %>>25</option>
                     <option value="50" <%= pagination.limit == 50 ? 'selected' : '' %>>50</option>
                     <option value="100" <%= pagination.limit == 100 ? 'selected' : '' %>>100</option>
@@ -453,15 +453,18 @@
                 item.style.display = text.includes(term) ? '' : 'none';
             });
         }, 150); // 150ms debounce delay
+    });
 
     function changeLimit(val) { 
-        // Update both hidden inputs and visible selects
+        // Update both hidden inputs and both visible selects
         const limitInput = document.getElementById('limitInput');
         const limitInputMobile = document.getElementById('limitInputMobile');
+        const limitSelect = document.getElementById('limitSelect');
         const limitSelectMobile = document.getElementById('limitSelectMobile');
         
         if (limitInput) limitInput.value = val;
         if (limitInputMobile) limitInputMobile.value = val;
+        if (limitSelect) limitSelect.value = val;
         if (limitSelectMobile) limitSelectMobile.value = val;
         
         savePref('items_per_page', val); 
@@ -472,10 +475,18 @@
         // Determine which form to submit based on visibility
         const filterForm = document.getElementById('filterForm');
         const filterFormMobile = document.getElementById('filterFormMobile');
-        const form = window.getComputedStyle(filterForm).display !== 'none' ? filterForm : filterFormMobile;
+        
+        // Check which form is visible (desktop or mobile)
+        const desktopVisible = filterForm && window.getComputedStyle(filterForm).display !== 'none';
+        const form = desktopVisible ? filterForm : filterFormMobile;
+        
         if (form) {
-            form.querySelector('input[name="page"]').value = p;
+            // Set page number in the appropriate form
+            const pageInput = form.querySelector('input[name="page"]');
+            if (pageInput) pageInput.value = p;
             form.submit();
+        } else {
+            console.error('No form found to submit');
         }
     }
     
