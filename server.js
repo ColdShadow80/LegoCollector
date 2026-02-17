@@ -135,6 +135,7 @@ app.get('/', (req, res) => {
     const filterThemes = req.query.themes || '';
     const filterYear = req.query.year || '';
     const filterSort = req.query.sort || 'newest';
+    const filterStatus = req.query.status || '';
     const page = parseInt(req.query.page) || 1;
     
     // Paginação baseada na preferência
@@ -174,6 +175,13 @@ app.get('/', (req, res) => {
         params.push(filterYear);
     }
 
+    // Filter by user's status (OWNED / WANTED)
+    if (filterStatus === 'owned') {
+        sql += " AND us.status = 'OWNED'";
+    } else if (filterStatus === 'wanted') {
+        sql += " AND us.status = 'WANTED'";
+    }
+
     // Ordenação
     if (filterSort === 'pieces') sql += " ORDER BY s.num_parts DESC";
     else if (filterSort === 'price') sql += " ORDER BY s.price_eur DESC";
@@ -197,6 +205,8 @@ app.get('/', (req, res) => {
             }
         }
         if (filterYear) { countSql += " AND s.year = ?"; countParams.push(filterYear); }
+        if (filterStatus === 'owned') { countSql += " AND EXISTS (SELECT 1 FROM user_sets us2 WHERE us2.set_num = s.set_num AND us2.user_id = ? AND us2.status = 'OWNED')"; countParams.push(req.user ? req.user.id : 0); }
+        else if (filterStatus === 'wanted') { countSql += " AND EXISTS (SELECT 1 FROM user_sets us2 WHERE us2.set_num = s.set_num AND us2.user_id = ? AND us2.status = 'WANTED')"; countParams.push(req.user ? req.user.id : 0); }
 
         db.get(countSql, countParams, (e, countRow) => {
             const totalSets = countRow ? countRow.total : 0;
