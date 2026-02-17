@@ -29,10 +29,11 @@
             <input id="setSearch" class="form-control form-control-sm w-50" placeholder="Procurar sets (numero / nome)...">
         </div>
 
-        <table class="table table-striped bg-white shadow-sm rounded">
+        <table class="table table-striped bg-white shadow-sm rounded align-middle">
             <thead>
                 <tr>
                     <th>Set</th>
+                    <th style="width:56px;text-align:center;">Imagem</th>
                     <th>Nome</th>
                     <th>Ano</th>
                     <th>Peças</th>
@@ -44,14 +45,18 @@
             </thead>
             <tbody id="setsBody">
                 <% sets.forEach(set => { %>
-                <tr data-term="<%= (set.set_num + ' ' + (set.name||'')).toLowerCase() %>">
+                <tr data-term="<%= (set.set_num + ' ' + (set.name||'')) .toLowerCase() %>">
                     <td><%= set.set_num %></td>
-                    <td>
-                        <% if (set.img_url) { %>
-                            <img src="<%= set.img_url %>" alt="img" style="height:32px;width:auto;max-width:48px;object-fit:contain;vertical-align:middle;margin-right:6px;">
-                        <% } %>
-                        <%= set.name %>
+                    <td style="width:56px;text-align:center;vertical-align:middle;">
+                        <div style="width:48px;height:48px;display:flex;align-items:center;justify-content:center;background:#f8f9fa;border-radius:6px;overflow:hidden;margin:auto;">
+                            <% if (set.img_url) { %>
+                                <img src="<%= set.img_url %>" alt="img" style="max-width:44px;max-height:44px;object-fit:contain;display:block;">
+                            <% } else { %>
+                                <span style="color:#ccc;font-size:22px;">&#9632;</span>
+                            <% } %>
+                        </div>
                     </td>
+                    <td style="vertical-align:middle;"><%= set.name %></td>
                     <td><%= set.year %></td>
                     <td><%= set.num_parts %></td>
                     <td><%= set.price_eur ? ('€' + set.price_eur) : '' %></td>
