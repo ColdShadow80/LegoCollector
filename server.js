@@ -96,21 +96,45 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
         callbackURL: "/auth/google/callback"
       },
       (accessToken, refreshToken, profile, done) => {
-        const email = profile.emails[0].value;
-        db.get("SELECT * FROM users WHERE email = ?", [email], (err, user) => {
-            if (user) {
-                if (!user.google_id) db.run("UPDATE users SET google_id = ? WHERE id = ?", [profile.id, user.id]);
-                return done(null, user);
-            } else {
-                db.run("INSERT INTO users (name, email, google_id, is_verified) VALUES (?, ?, ?, 1)", 
-                    [profile.displayName, email, profile.id], 
-                    function(err) {
-                        if (err) return done(err);
-                        db.get("SELECT * FROM users WHERE id = ?", [this.lastID], (e, u) => done(e, u));
-                    }
-                );
-            }
-        });
+        try {
+          console.log('GoogleStrategy: profile received', profile && profile.id);
+          const emails = profile && profile.emails ? profile.emails.map(e => e.value) : [];
+          console.log('GoogleStrategy: emails', emails);
+          const email = emails.length > 0 ? emails[0] : null;
+          if (!email) return done(new Error('No email available in Google profile'));
+
+          db.get("SELECT * FROM users WHERE email = ?", [email], (err, user) => {
+              if (err) {
+                  console.error('DB error looking up user by email', err);
+                  return done(err);
+              }
+              if (user) {
+                  if (!user.google_id) {
+                      db.run("UPDATE users SET google_id = ? WHERE id = ?", [profile.id, user.id], function(upErr) {
+                          if (upErr) console.error('Failed to update google_id', upErr);
+                      });
+                  }
+                  return done(null, user);
+              } else {
+                  db.run("INSERT INTO users (name, email, google_id, is_verified) VALUES (?, ?, ?, 1)",
+                      [profile.displayName || null, email, profile.id],
+                      function(insErr) {
+                          if (insErr) {
+                              console.error('Failed to insert Google user', insErr);
+                              return done(insErr);
+                          }
+                          db.get("SELECT * FROM users WHERE id = ?", [this.lastID], (e, u) => {
+                              if (e) console.error('Failed to fetch newly inserted user', e);
+                              return done(e, u);
+                          });
+                      }
+                  );
+              }
+          });
+        } catch (ex) {
+          console.error('Exception in GoogleStrategy callback', ex);
+          return done(ex);
+        }
       }
     ));
 } else {
@@ -533,8 +557,10 @@ app.post('/login', (req, res, next) => {
         req.logIn(user, (e) => {
             if (e) return next(e);
             const now = Date.now();
+            console.log('Updating last_login for user', user.id, '->', now);
             db.run("UPDATE users SET last_login = ? WHERE id = ?", [now, user.id], (dbErr) => {
-                // ignore DB errors when updating last_login, still proceed to redirect
+                if (dbErr) console.error('last_login update error', dbErr);
+                else console.log('last_login updated for', user.id);
                 return res.redirect('/');
             });
         });
@@ -546,15 +572,20 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
     app.get('/auth/google/callback', (req, res, next) => {
         passport.authenticate('google', (err, user, info) => {
             if (err) {
-                console.error('Google auth error:', err);
+                console.error('Google auth error:', err && err.stack ? err.stack : err);
+                console.error('Google auth info (if any):', info);
                 return res.redirect('/login?error=google_error');
             }
-            if (!user) return res.redirect('/login?error=google_failed');
+            if (!user) {
+                console.error('Google auth returned no user. Info:', info);
+                return res.redirect('/login?error=google_failed');
+            }
             req.logIn(user, (e) => {
                 if (e) { console.error('Login after Google error', e); return res.redirect('/login?error=login_failed'); }
+                console.log('Google login successful for user', user.id);
                 const now = Date.now();
                 db.run("UPDATE users SET last_login = ? WHERE id = ?", [now, user.id], (dbErr) => {
-                    // ignore dbErr
+                    if (dbErr) console.error('last_login update after Google error', dbErr);
                     return res.redirect('/');
                 });
             });
