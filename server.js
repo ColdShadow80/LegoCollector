@@ -89,29 +89,33 @@ passport.use(new LocalStrategy({ usernameField: 'email' }, (email, password, don
     });
 }));
 
-passport.use(new GoogleStrategy({
-    clientID: process.env.GOOGLE_CLIENT_ID,
-    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    callbackURL: "/auth/google/callback"
-  },
-  (accessToken, refreshToken, profile, done) => {
-    const email = profile.emails[0].value;
-    db.get("SELECT * FROM users WHERE email = ?", [email], (err, user) => {
-        if (user) {
-            if (!user.google_id) db.run("UPDATE users SET google_id = ? WHERE id = ?", [profile.id, user.id]);
-            return done(null, user);
-        } else {
-            db.run("INSERT INTO users (name, email, google_id, is_verified) VALUES (?, ?, ?, 1)", 
-                [profile.displayName, email, profile.id], 
-                function(err) {
-                    if (err) return done(err);
-                    db.get("SELECT * FROM users WHERE id = ?", [this.lastID], (e, u) => done(e, u));
-                }
-            );
-        }
-    });
-  }
-));
+if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+    passport.use(new GoogleStrategy({
+        clientID: process.env.GOOGLE_CLIENT_ID,
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+        callbackURL: "/auth/google/callback"
+      },
+      (accessToken, refreshToken, profile, done) => {
+        const email = profile.emails[0].value;
+        db.get("SELECT * FROM users WHERE email = ?", [email], (err, user) => {
+            if (user) {
+                if (!user.google_id) db.run("UPDATE users SET google_id = ? WHERE id = ?", [profile.id, user.id]);
+                return done(null, user);
+            } else {
+                db.run("INSERT INTO users (name, email, google_id, is_verified) VALUES (?, ?, ?, 1)", 
+                    [profile.displayName, email, profile.id], 
+                    function(err) {
+                        if (err) return done(err);
+                        db.get("SELECT * FROM users WHERE id = ?", [this.lastID], (e, u) => done(e, u));
+                    }
+                );
+            }
+        });
+      }
+    ));
+} else {
+    console.log('Google OAuth not configured (GOOGLE_CLIENT_ID/SECRET missing) — skipping Google auth setup.');
+}
 
 passport.serializeUser((user, done) => done(null, user.id));
 passport.deserializeUser((id, done) => {
@@ -190,22 +194,37 @@ app.get('/', (req, res) => {
             db.all(sql, params, (err, rows) => {
                 if (err) return res.status(500).send("Erro BD");
 
+                // Preserve DB fields expected by the original template
                 const processedSets = rows.map(s => ({
                     ...s,
-                    owned: s.user_status === 'OWNED',
-                    wanted: s.user_status === 'WANTED'
+                    user_status: s.user_status || null
                 }));
 
-                res.render('index', {
-                    sets: processedSets,
-                    themes: themes,
-                    pagination: { page, totalPages },
-                    filters: { // Objeto Filters Restaurado
-                        search: filterSearch,
-                        theme: filterTheme,
-                        year: filterYear,
-                        sort: filterSort
-                    }
+                // Get available years for the left menu
+                db.all("SELECT DISTINCT year as year FROM sets ORDER BY year DESC", [], (eYears, allYears) => {
+                    if (eYears) allYears = [];
+
+                    res.render('index', {
+                        sets: processedSets,
+                        themes: themes,
+                        allThemes: themes,
+                        allYears: allYears || [],
+                        query: {
+                            search: filterSearch,
+                            theme: filterTheme,
+                            year: filterYear,
+                            sort: filterSort,
+                            status: req.query.status || '',
+                            themes: req.query.themes || ''
+                        },
+                        pagination: { page, totalPages, limit, totalItems: totalSets },
+                        filters: { // keep compatibility with newer code
+                            search: filterSearch,
+                            theme: filterTheme,
+                            year: filterYear,
+                            sort: filterSort
+                        }
+                    });
                 });
             });
         });
@@ -348,8 +367,14 @@ app.post('/login', passport.authenticate('local', {
     successRedirect: '/',
     failureRedirect: '/login?error=DadosInvalidos'
 }));
-app.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
-app.get('/auth/google/callback', passport.authenticate('google', { failureRedirect: '/login' }), (req, res) => res.redirect('/'));
+if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+    app.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
+    app.get('/auth/google/callback', passport.authenticate('google', { failureRedirect: '/login' }), (req, res) => res.redirect('/'));
+} else {
+    // Provide safe fallback routes when Google OAuth is not configured
+    app.get('/auth/google', (req, res) => res.redirect('/login?error=google_not_configured'));
+    app.get('/auth/google/callback', (req, res) => res.redirect('/login?error=google_not_configured'));
+}
 app.get('/logout', (req, res, next) => {
     req.logout((err) => {
         if (err) return next(err);
