@@ -18,6 +18,34 @@ const app = express();
 
 const upload = multer({ dest: 'uploads/' });
 
+// Simple in-memory cache for frequently accessed data
+const cache = {
+    years: null,
+    yearsExpiry: 0,
+    getYears() {
+        const now = Date.now();
+        if (this.years && this.yearsExpiry > now) {
+            return Promise.resolve(this.years);
+        }
+        // Get years and cache for 5 minutes
+        return new Promise((resolve, reject) => {
+            db.all("SELECT DISTINCT year FROM sets ORDER BY year DESC", [], (err, rows) => {
+                if (err) {
+                    reject(err);
+                } else {
+                    this.years = rows || [];
+                    this.yearsExpiry = now + 5 * 60 * 1000; // 5 minute cache
+                    resolve(this.years);
+                }
+            });
+        });
+    },
+    clearYears() {
+        this.years = null;
+        this.yearsExpiry = 0;
+    }
+};
+
 // Configuração do EJS e Pasta Pública
 app.set('view engine', 'ejs');
 app.use(express.static('public'));
@@ -248,7 +276,17 @@ app.get('/', (req, res) => {
     else sql += " ORDER BY s.year DESC, s.set_num DESC"; 
 
     // Executar Queries
-    db.all("SELECT id, name, (SELECT COUNT(*) FROM sets WHERE theme_id = themes.id) as count, (SELECT MIN(year) FROM sets WHERE theme_id = themes.id) as min_year, (SELECT MAX(year) FROM sets WHERE theme_id = themes.id) as max_year FROM themes ORDER BY name", [], (err, themes) => {
+    // OPTIMIZED: Use single GROUP BY query instead of subqueries (major performance improvement)
+    db.all(`
+        SELECT t.id, t.name,
+               COUNT(s.set_num) as count,
+               MIN(s.year) as min_year,
+               MAX(s.year) as max_year
+        FROM themes t
+        LEFT JOIN sets s ON s.theme_id = t.id
+        GROUP BY t.id, t.name
+        ORDER BY t.name
+    `, [], (err, themes) => {
         if(err) {
             console.error('\u274c Themes query error:');
             console.error('Error:', err);
@@ -306,13 +344,8 @@ app.get('/', (req, res) => {
                 
                 console.log('✅ Homepage query successful. Returned', rows.length, 'sets');
 
-                // Get available years for the left menu
-                db.all("SELECT DISTINCT year as year FROM sets ORDER BY year DESC", [], (eYears, allYears) => {
-                    if (eYears) {
-                        console.error('\u274c Years query error:', eYears);
-                        allYears = [];
-                    }
-
+                // Get available years for the left menu (cached for 5 minutes)
+                cache.getYears().then(allYears => {
                     res.render('index', {
                         sets: processedSets,
                         themes: themes,
@@ -328,6 +361,29 @@ app.get('/', (req, res) => {
                         },
                         pagination: { page, totalPages, limit, totalItems: totalSets },
                         filters: { // keep compatibility with newer code
+                            search: filterSearch,
+                            theme: filterThemes,
+                            year: filterYear,
+                            sort: filterSort
+                        }
+                    });
+                }).catch(err => {
+                    console.error('✗ Years cache error:', err);
+                    res.render('index', {
+                        sets: processedSets,
+                        themes: themes,
+                        allThemes: themes,
+                        allYears: [],
+                        query: {
+                            search: filterSearch,
+                            theme: filterThemes,
+                            year: filterYear,
+                            sort: filterSort,
+                            status: req.query.status || '',
+                            themes: req.query.themes || ''
+                        },
+                        pagination: { page, totalPages, limit, totalItems: totalSets },
+                        filters: {
                             search: filterSearch,
                             theme: filterThemes,
                             year: filterYear,

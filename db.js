@@ -87,6 +87,27 @@ db.serialize(() => {
     addColumn('user_sets', "build_status TEXT DEFAULT 'Montado'");
     addColumn('user_sets', 'location TEXT');
     addColumn('user_sets', 'purchase_price REAL DEFAULT 0');
+
+    // --- 3. CREATE INDEXES (Performance Critical) ---
+    // Index for theme filtering
+    db.run(`CREATE INDEX IF NOT EXISTS idx_sets_theme_id ON sets(theme_id)`, (err) => {
+        if (!err) console.log("✨ Index created: sets(theme_id)");
+    });
+    
+    // Index for year filtering and sorting
+    db.run(`CREATE INDEX IF NOT EXISTS idx_sets_year ON sets(year)`, (err) => {
+        if (!err) console.log("✨ Index created: sets(year)");
+    });
+    
+    // Index for user_sets lookups
+    db.run(`CREATE INDEX IF NOT EXISTS idx_user_sets_user ON user_sets(user_id, status)`, (err) => {
+        if (!err) console.log("✨ Index created: user_sets(user_id, status)");
+    });
+    
+    // Index for barcode lookups
+    db.run(`CREATE INDEX IF NOT EXISTS idx_user_sets_set ON user_sets(set_num)`, (err) => {
+        if (!err) console.log("✨ Index created: user_sets(set_num)");
+    });
 });
 
 module.exports = db;
