@@ -99,6 +99,15 @@ db.serialize(() => {
         if (!err) console.log("✨ Index created: sets(year)");
     });
     
+    // Index for search (name and set_num searches)
+    db.run(`CREATE INDEX IF NOT EXISTS idx_sets_name ON sets(name)`, (err) => {
+        if (!err) console.log("✨ Index created: sets(name)");
+    });
+    
+    db.run(`CREATE INDEX IF NOT EXISTS idx_sets_set_num ON sets(set_num)`, (err) => {
+        if (!err) console.log("✨ Index created: sets(set_num)");
+    });
+    
     // Index for user_sets lookups
     db.run(`CREATE INDEX IF NOT EXISTS idx_user_sets_user ON user_sets(user_id, status)`, (err) => {
         if (!err) console.log("✨ Index created: user_sets(user_id, status)");
