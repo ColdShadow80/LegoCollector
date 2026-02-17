@@ -385,6 +385,32 @@ app.get('/admin/themes', ensureAdmin, (req, res) => {
     });
 });
 
+// Toggle theme fields (is_hidden, etc.)
+app.post('/admin/themes/toggle', ensureAdmin, express.json(), (req, res) => {
+    const { theme_id, field, value } = req.body;
+    if (!theme_id || !field) return res.status(400).json({ error: 'missing' });
+    const val = (value === true || value === 'true' || value === 1 || value === '1') ? 1 : 0;
+    const allowed = ['is_hidden'];
+    if (!allowed.includes(field)) return res.status(400).json({ error: 'invalid_field' });
+    db.run(`UPDATE themes SET ${field} = ? WHERE id = ?`, [val, theme_id], function(err) {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ success: true });
+    });
+});
+
+// Toggle set fields (is_hidden, ignore_parts)
+app.post('/admin/sets/toggle', ensureAdmin, express.json(), (req, res) => {
+    const { set_num, field, value } = req.body;
+    if (!set_num || !field) return res.status(400).json({ error: 'missing' });
+    const val = (value === true || value === 'true' || value === 1 || value === '1') ? 1 : 0;
+    const allowed = ['is_hidden','ignore_parts'];
+    if (!allowed.includes(field)) return res.status(400).json({ error: 'invalid_field' });
+    db.run(`UPDATE sets SET ${field} = ? WHERE set_num = ?`, [val, set_num], function(err) {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ success: true });
+    });
+});
+
 // --- AUTENTICAÇÃO ROTAS ---
 app.get('/login', (req, res) => res.render('login'));
 app.post('/login', passport.authenticate('local', {
