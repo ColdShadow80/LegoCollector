@@ -8,42 +8,127 @@
 <body class="bg-light">
     <nav class="navbar navbar-dark bg-dark mb-4 px-3">
         <a class="navbar-brand" href="/">Admin Painel</a>
-        <a href="/" class="btn btn-outline-light btn-sm">Voltar ao Site</a>
+        <div>
+            <a href="/" class="btn btn-outline-light btn-sm me-2">Voltar ao Site</a>
+            <button class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#newThemeModal">Novo Tema</button>
+        </div>
     </nav>
     <div class="container">
-        <h3>Gerir Temas</h3>
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h3>Gerir Temas</h3>
+            <input id="themeSearch" class="form-control form-control-sm w-50" placeholder="Procurar tema...">
+        </div>
+
         <table class="table table-striped bg-white shadow-sm rounded">
             <thead>
                 <tr>
                     <th>ID</th>
                     <th>Nome</th>
                     <th>Sets</th>
+                    <th>Período</th>
                     <th>Esconder?</th>
+                    <th>Ações</th>
                 </tr>
             </thead>
-            <tbody>
+            <tbody id="themesBody">
                 <% themes.forEach(t => { %>
-                <tr>
+                <tr data-name="<%= t.name.toLowerCase() %>">
                     <td><%= t.id %></td>
                     <td><%= t.name %></td>
                     <td><%= t.total_sets %></td>
+                    <td><%= t.min_year ? (t.min_year + (t.max_year && t.max_year !== t.min_year ? ' - ' + t.max_year : '')) : '' %></td>
                     <td>
                         <div class="form-check form-switch">
                             <input class="form-check-input" type="checkbox" onchange="toggle(<%= t.id %>, 'is_hidden', this.checked)" <%= t.is_hidden ? 'checked' : '' %>>
                         </div>
+                    </td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-primary" onclick="openEdit(<%= t.id %>, '<%= (t.name||'').replace(/'/g, "\\'") %>')">Editar</button>
                     </td>
                 </tr>
                 <% }) %>
             </tbody>
         </table>
     </div>
+
+    <!-- New Theme Modal -->
+    <div class="modal fade" id="newThemeModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Criar Novo Tema</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input id="newThemeName" class="form-control" placeholder="Nome do tema">
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button class="btn btn-success" id="createThemeBtn">Criar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Modal -->
+    <div class="modal fade" id="editThemeModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Editar Tema</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="editThemeId">
+                    <label class="small text-muted">Nome</label>
+                    <input id="editThemeName" class="form-control mb-2">
+                    <div class="form-check">
+                        <input id="editThemeHidden" class="form-check-input" type="checkbox">
+                        <label class="form-check-label">Esconder tema</label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button class="btn btn-primary" id="saveThemeBtn">Guardar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        async function toggle(id, field, val) {
-            await fetch('/admin/themes/toggle', {
-                method: 'POST', headers: {'Content-Type':'application/json'},
-                body: JSON.stringify({ theme_id: id, field: field, value: val })
+        document.getElementById('themeSearch').addEventListener('input', (e) => {
+            const q = e.target.value.trim().toLowerCase();
+            document.querySelectorAll('#themesBody tr').forEach(r => {
+                r.style.display = (!q || r.dataset.name.includes(q)) ? '' : 'none';
             });
+        });
+
+        async function toggle(id, field, val) {
+            await fetch('/admin/themes/toggle', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ theme_id: id, field: field, value: val }) });
         }
+
+        document.getElementById('createThemeBtn').addEventListener('click', async () => {
+            const name = document.getElementById('newThemeName').value.trim();
+            if (!name) return alert('Nome obrigatório');
+            const res = await fetch('/admin/themes/create', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ name }) });
+            if (res.ok) location.reload(); else alert('Erro');
+        });
+
+        function openEdit(id, name) {
+            document.getElementById('editThemeId').value = id;
+            document.getElementById('editThemeName').value = name;
+            document.getElementById('editThemeHidden').checked = false;
+            new bootstrap.Modal(document.getElementById('editThemeModal')).show();
+        }
+
+        document.getElementById('saveThemeBtn').addEventListener('click', async () => {
+            const id = document.getElementById('editThemeId').value;
+            const name = document.getElementById('editThemeName').value.trim();
+            const is_hidden = document.getElementById('editThemeHidden').checked;
+            const res = await fetch('/admin/themes/update', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ id, name, is_hidden }) });
+            if (res.ok) location.reload(); else alert('Erro a guardar');
+        });
     </script>
 </body>
 </html>

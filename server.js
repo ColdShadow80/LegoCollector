@@ -372,6 +372,19 @@ app.get('/admin/sets', ensureAdmin, (req, res) => {
     const limit = 50;
     const offset = (page - 1) * limit;
 
+    if (req.query.export === 'csv') {
+        // Export CSV
+        db.all("SELECT * FROM sets", [], (err, rows) => {
+            if (err) return res.status(500).send('Erro');
+            res.setHeader('Content-Type', 'text/csv');
+            res.setHeader('Content-Disposition', 'attachment; filename="sets.csv"');
+            const header = ['set_num','name','year','num_parts','price_eur'].join(',') + '\n';
+            const body = rows.map(r => `${r.set_num},"${(r.name||'').replace(/"/g,'""')}",${r.year||''},${r.num_parts||''},${r.price_eur||''}`).join('\n');
+            res.send(header + body);
+        });
+        return;
+    }
+
     db.all("SELECT * FROM sets LIMIT ? OFFSET ?", [limit, offset], (err, rows) => {
         db.get("SELECT COUNT(*) as count FROM sets", (e, c) => {
             res.render('admin/sets', { sets: rows, pagination: { page, totalPages: Math.ceil(c.count/limit) }});
@@ -379,10 +392,51 @@ app.get('/admin/sets', ensureAdmin, (req, res) => {
     });
 });
 
+// Update set endpoint
+app.post('/admin/sets/update', ensureAdmin, express.json(), (req, res) => {
+    const { set_num, name, year, price_eur, is_hidden, ignore_parts } = req.body;
+    if (!set_num) return res.status(400).json({ error: 'missing' });
+    const updates = [];
+    const params = [];
+    if (name !== undefined) { updates.push('name = ?'); params.push(name); }
+    if (year !== undefined) { updates.push('year = ?'); params.push(year); }
+    if (price_eur !== undefined) { updates.push('price_eur = ?'); params.push(price_eur); }
+    if (is_hidden !== undefined) { updates.push('is_hidden = ?'); params.push(is_hidden ? 1 : 0); }
+    if (ignore_parts !== undefined) { updates.push('ignore_parts = ?'); params.push(ignore_parts ? 1 : 0); }
+    if (updates.length === 0) return res.json({ success: true });
+    params.push(set_num);
+    db.run(`UPDATE sets SET ${updates.join(', ')} WHERE set_num = ?`, params, function(err) { if (err) return res.status(500).json({ error: err.message }); res.json({ success: true }); });
+});
+
 app.get('/admin/themes', ensureAdmin, (req, res) => {
-    db.all(`SELECT t.*, (SELECT COUNT(*) FROM sets WHERE theme_id = t.id) as total_sets FROM themes t ORDER BY t.id`, [], (err, rows) => {
+    db.all(`SELECT t.*, (SELECT COUNT(*) FROM sets WHERE theme_id = t.id) as total_sets, (SELECT MIN(year) FROM sets WHERE theme_id = t.id) as min_year, (SELECT MAX(year) FROM sets WHERE theme_id = t.id) as max_year FROM themes t ORDER BY t.name`, [], (err, rows) => {
+        if (err) return res.status(500).send('Erro Temas');
         res.render('admin/themes', { themes: rows });
     });
+});
+
+// Create a new theme
+app.post('/admin/themes/create', ensureAdmin, express.json(), (req, res) => {
+    const { name } = req.body;
+    if (!name) return res.status(400).json({ error: 'missing_name' });
+    db.run("INSERT INTO themes (name) VALUES (?)", [name], function(err) {
+        if (err) return res.status(500).json({ error: err.message });
+        db.get("SELECT * FROM themes WHERE id = ?", [this.lastID], (e, row) => res.json({ success: true, theme: row }));
+    });
+});
+
+// Update theme (name or is_hidden)
+app.post('/admin/themes/update', ensureAdmin, express.json(), (req, res) => {
+    const { id, name, is_hidden } = req.body;
+    if (!id) return res.status(400).json({ error: 'missing_id' });
+    const updates = [];
+    const params = [];
+    if (name !== undefined) { updates.push('name = ?'); params.push(name); }
+    if (is_hidden !== undefined) { updates.push('is_hidden = ?'); params.push(is_hidden ? 1 : 0); }
+    if (updates.length === 0) return res.json({ success: true });
+    const sql = `UPDATE themes SET ${updates.join(', ')} WHERE id = ?`;
+    params.push(id);
+    db.run(sql, params, function(err) { if (err) return res.status(500).json({ error: err.message }); res.json({ success: true }); });
 });
 
 // Toggle theme fields (is_hidden, etc.)

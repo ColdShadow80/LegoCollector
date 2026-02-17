@@ -8,24 +8,38 @@
 <body class="bg-light">
     <nav class="navbar navbar-dark bg-dark mb-4 px-3">
         <a class="navbar-brand" href="/">Admin Painel</a>
-        <a href="/" class="btn btn-outline-light btn-sm">Voltar ao Site</a>
+        <div>
+            <a href="/" class="btn btn-outline-light btn-sm me-2">Voltar ao Site</a>
+            <a href="/admin/sets?export=csv" class="btn btn-outline-light btn-sm">Exportar CSV</a>
+        </div>
     </nav>
     <div class="container">
-        <h3>Gerir Sets</h3>
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h3>Gerir Sets</h3>
+            <input id="setSearch" class="form-control form-control-sm w-50" placeholder="Procurar sets (numero / nome)...">
+        </div>
+
         <table class="table table-striped bg-white shadow-sm rounded">
             <thead>
                 <tr>
                     <th>Set</th>
                     <th>Nome</th>
+                    <th>Ano</th>
+                    <th>Peças</th>
+                    <th>Preço</th>
                     <th>Esconder?</th>
                     <th>Ignorar Peças?</th>
+                    <th>Ações</th>
                 </tr>
             </thead>
-            <tbody>
+            <tbody id="setsBody">
                 <% sets.forEach(set => { %>
-                <tr>
+                <tr data-term="<%= (set.set_num + ' ' + (set.name||'')).toLowerCase() %>">
                     <td><%= set.set_num %></td>
                     <td><%= set.name %></td>
+                    <td><%= set.year %></td>
+                    <td><%= set.num_parts %></td>
+                    <td><%= set.price_eur ? ('€' + set.price_eur) : '' %></td>
                     <td>
                         <div class="form-check form-switch">
                             <input class="form-check-input" type="checkbox" onchange="toggle('<%= set.set_num %>', 'is_hidden', this.checked)" <%= set.is_hidden ? 'checked' : '' %>>
@@ -36,23 +50,87 @@
                             <input class="form-check-input" type="checkbox" onchange="toggle('<%= set.set_num %>', 'ignore_parts', this.checked)" <%= set.ignore_parts ? 'checked' : '' %>>
                         </div>
                     </td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-primary" onclick="openEdit('<%= set.set_num %>', '<%= (set.name||'').replace(/'/g, "\\'") %>', '<%= set.year %>', '<%= set.price_eur %>')">Editar</button>
+                    </td>
                 </tr>
                 <% }) %>
             </tbody>
         </table>
+
         <div class="d-flex justify-content-between">
             <% if(pagination.page > 1) { %><a href="?page=<%= pagination.page - 1 %>" class="btn btn-secondary">Anterior</a><% } %>
             <span>Página <%= pagination.page %> de <%= pagination.totalPages %></span>
             <% if(pagination.page < pagination.totalPages) { %><a href="?page=<%= pagination.page + 1 %>" class="btn btn-secondary">Próximo</a><% } %>
         </div>
     </div>
+
+    <!-- Edit Set Modal -->
+    <div class="modal fade" id="editSetModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Editar Set</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="editSetNum">
+                    <label class="small text-muted">Nome</label>
+                    <input id="editSetName" class="form-control mb-2">
+                    <label class="small text-muted">Ano</label>
+                    <input id="editSetYear" class="form-control mb-2">
+                    <label class="small text-muted">Preço (€)</label>
+                    <input id="editSetPrice" class="form-control mb-2">
+                    <div class="form-check">
+                        <input id="editSetHidden" class="form-check-input" type="checkbox">
+                        <label class="form-check-label">Esconder set</label>
+                    </div>
+                    <div class="form-check mt-1">
+                        <input id="editSetIgnoreParts" class="form-check-input" type="checkbox">
+                        <label class="form-check-label">Ignorar numeração de peças</label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button class="btn btn-primary" id="saveSetBtn">Guardar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        async function toggle(id, field, val) {
-            await fetch('/admin/sets/toggle', {
-                method: 'POST', headers: {'Content-Type':'application/json'},
-                body: JSON.stringify({ set_num: id, field: field, value: val })
+        document.getElementById('setSearch').addEventListener('input', (e) => {
+            const q = e.target.value.trim().toLowerCase();
+            document.querySelectorAll('#setsBody tr').forEach(r => {
+                r.style.display = (!q || r.dataset.term.includes(q)) ? '' : 'none';
             });
+        });
+
+        async function toggle(id, field, val) {
+            await fetch('/admin/sets/toggle', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ set_num: id, field: field, value: val }) });
         }
+
+        function openEdit(setNum, name, year, price) {
+            document.getElementById('editSetNum').value = setNum;
+            document.getElementById('editSetName').value = name || '';
+            document.getElementById('editSetYear').value = year || '';
+            document.getElementById('editSetPrice').value = price || '';
+            document.getElementById('editSetHidden').checked = false;
+            document.getElementById('editSetIgnoreParts').checked = false;
+            new bootstrap.Modal(document.getElementById('editSetModal')).show();
+        }
+
+        document.getElementById('saveSetBtn').addEventListener('click', async () => {
+            const set_num = document.getElementById('editSetNum').value;
+            const name = document.getElementById('editSetName').value.trim();
+            const year = document.getElementById('editSetYear').value.trim();
+            const price = document.getElementById('editSetPrice').value.trim();
+            const is_hidden = document.getElementById('editSetHidden').checked;
+            const ignore_parts = document.getElementById('editSetIgnoreParts').checked;
+            const res = await fetch('/admin/sets/update', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ set_num, name, year, price_eur: price, is_hidden, ignore_parts }) });
+            if (res.ok) location.reload(); else alert('Erro ao guardar');
+        });
     </script>
 </body>
 </html>
