@@ -526,10 +526,20 @@ app.post('/admin/sets/toggle', ensureAdmin, express.json(), (req, res) => {
 
 // --- AUTENTICAÇÃO ROTAS ---
 app.get('/login', (req, res) => res.render('login'));
-app.post('/login', passport.authenticate('local', {
-    successRedirect: '/',
-    failureRedirect: '/login?error=DadosInvalidos'
-}));
+app.post('/login', (req, res, next) => {
+    passport.authenticate('local', (err, user, info) => {
+        if (err) return next(err);
+        if (!user) return res.redirect('/login?error=DadosInvalidos');
+        req.logIn(user, (e) => {
+            if (e) return next(e);
+            const now = Date.now();
+            db.run("UPDATE users SET last_login = ? WHERE id = ?", [now, user.id], (dbErr) => {
+                // ignore DB errors when updating last_login, still proceed to redirect
+                return res.redirect('/');
+            });
+        });
+    })(req, res, next);
+});
 if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
     app.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
     // Use explicit callback to handle strategy errors gracefully
@@ -542,7 +552,11 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
             if (!user) return res.redirect('/login?error=google_failed');
             req.logIn(user, (e) => {
                 if (e) { console.error('Login after Google error', e); return res.redirect('/login?error=login_failed'); }
-                return res.redirect('/');
+                const now = Date.now();
+                db.run("UPDATE users SET last_login = ? WHERE id = ?", [now, user.id], (dbErr) => {
+                    // ignore dbErr
+                    return res.redirect('/');
+                });
             });
         })(req, res, next);
     });
