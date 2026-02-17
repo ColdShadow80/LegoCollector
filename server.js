@@ -401,7 +401,10 @@ app.get('/set/:set_num', (req, res) => {
     const setNum = req.params.set_num;
     db.get("SELECT s.*, t.name as theme_name FROM sets s LEFT JOIN themes t ON s.theme_id = t.id WHERE s.set_num = ?", [setNum], (err, set) => {
         if (err) return res.status(500).send('Erro BD');
-        if (!set) return res.status(404).send('Set não encontrado');
+        if (!set) {
+            // If the set isn't in our DB, redirect to search results for that set_num
+            return res.redirect('/?q=' + encodeURIComponent(setNum));
+        }
 
         if (!req.user) {
             return res.render('set_detail', { set, user: null });
