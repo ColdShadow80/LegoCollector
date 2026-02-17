@@ -283,6 +283,17 @@
                             <% }) %>
                         </div>
                     </div>
+
+                    <!-- Items per page (mobile) -->
+                    <div class="mb-3">
+                        <label class="small fw-bold">Items por página</label>
+                        <select class="form-select form-select-sm" onchange="changeLimit(this.value)" id="limitSelectMobile">
+                            <option value="25" <%= pagination.limit == 25 ? 'selected' : '' %>>25</option>
+                            <option value="50" <%= pagination.limit == 50 ? 'selected' : '' %>>50</option>
+                            <option value="100" <%= pagination.limit == 100 ? 'selected' : '' %>>100</option>
+                            <option value="all" <%= pagination.limit > 1000 ? 'selected' : '' %>>Tds</option>
+                        </select>
+                    </div>
                 </div>
 
                 <!-- Botões fixos no fundo do offcanvas -->
@@ -435,9 +446,30 @@
         });
     });
 
-    function changeLimit(val) { document.getElementById('limitInput').value = val; savePref('items_per_page', val); submitPage(1); }
+    function changeLimit(val) { 
+        // Update both hidden inputs and visible selects
+        const limitInput = document.getElementById('limitInput');
+        const limitInputMobile = document.getElementById('limitInputMobile');
+        const limitSelectMobile = document.getElementById('limitSelectMobile');
+        
+        if (limitInput) limitInput.value = val;
+        if (limitInputMobile) limitInputMobile.value = val;
+        if (limitSelectMobile) limitSelectMobile.value = val;
+        
+        savePref('items_per_page', val); 
+        submitPage(1); 
+    }
     function changePage(p) { if(p>0) submitPage(p); }
-    function submitPage(p) { document.querySelector('input[name="page"]').value = p; document.getElementById('filterForm').submit(); }
+    function submitPage(p) { 
+        // Determine which form to submit based on visibility
+        const filterForm = document.getElementById('filterForm');
+        const filterFormMobile = document.getElementById('filterFormMobile');
+        const form = window.getComputedStyle(filterForm).display !== 'none' ? filterForm : filterFormMobile;
+        if (form) {
+            form.querySelector('input[name="page"]').value = p;
+            form.submit();
+        }
+    }
     
     document.getElementById('darkModeSwitch')?.addEventListener('change', (e) => {
         document.documentElement.setAttribute('data-bs-theme', e.target.checked ? 'dark' : 'light'); savePref('dark_mode', e.target.checked);

@@ -163,8 +163,33 @@ app.get('/', (req, res) => {
     const filterStatus = req.query.status || '';
     const page = parseInt(req.query.page) || 1;
     
-    // Paginação baseada na preferência
-    const limit = (req.user && req.user.items_per_page) ? req.user.items_per_page : 24;
+    // Log incoming filters for debugging
+    console.log('\n📋 Homepage request with filters:');
+    console.log('  q:', filterSearch);
+    console.log('  themes:', filterThemes);
+    console.log('  year:', filterYear);
+    console.log('  status:', filterStatus);
+    console.log('  page:', page);
+    
+    // Paginação: se houver limit na query string (do select dropdown), use-o
+    // Senão, use a preferência do utilizador, ou default 24
+    let limit = 24;
+    if (req.query.limit) {
+        const paramLimit = req.query.limit;
+        if (paramLimit === 'all') {
+            limit = 10000; // arbitrariamente grande
+        } else {
+            const parsed = parseInt(paramLimit);
+            if ([25, 50, 100].includes(parsed)) {
+                limit = parsed;
+            }
+        }
+        console.log('  limit (from query):', limit);
+    } else if (req.user && req.user.items_per_page) {
+        limit = req.user.items_per_page;
+        console.log('  limit (from user pref):', limit);
+    }
+    
     const offset = (page - 1) * limit;
 
     let sql = `
@@ -214,7 +239,11 @@ app.get('/', (req, res) => {
 
     // Executar Queries
     db.all("SELECT id, name, (SELECT COUNT(*) FROM sets WHERE theme_id = themes.id) as count, (SELECT MIN(year) FROM sets WHERE theme_id = themes.id) as min_year, (SELECT MAX(year) FROM sets WHERE theme_id = themes.id) as max_year FROM themes ORDER BY name", [], (err, themes) => {
-        if(err) return res.status(500).send("Erro Temas");
+        if(err) {
+            console.error('\u274c Themes query error:');
+            console.error('Error:', err);
+            return res.status(500).send("Erro Temas");
+        }
 
         // Contagem Total
         let countSql = `SELECT COUNT(*) as total FROM sets s WHERE 1=1`;
@@ -234,24 +263,45 @@ app.get('/', (req, res) => {
         else if (filterStatus === 'wanted') { countSql += " AND EXISTS (SELECT 1 FROM user_sets us2 WHERE us2.set_num = s.set_num AND us2.user_id = ? AND us2.status = 'WANTED')"; countParams.push(req.user ? req.user.id : 0); }
 
         db.get(countSql, countParams, (e, countRow) => {
+            if (e) {
+                console.error('\u274c Count query error:');
+                console.error('SQL:', countSql);
+                console.error('Params:', countParams);
+                console.error('Error:', e);
+            }
             const totalSets = countRow ? countRow.total : 0;
             const totalPages = Math.ceil(totalSets / limit);
 
             sql += " LIMIT ? OFFSET ?";
             params.push(limit, offset);
+            
+            console.log('📊 Final query:');
+            console.log('  Total sets:', totalSets);
+            console.log('  Total pages:', totalPages);
 
             db.all(sql, params, (err, rows) => {
-                if (err) return res.status(500).send("Erro BD");
+                if (err) {
+                    console.error('❌ Homepage filter query error:');
+                    console.error('SQL:', sql);
+                    console.error('Params:', params);
+                    console.error('Error:', err);
+                    return res.status(500).send("Erro BD");
+                }
 
                 // Preserve DB fields expected by the original template
                 const processedSets = rows.map(s => ({
                     ...s,
                     user_status: s.user_status || null
                 }));
+                
+                console.log('✅ Homepage query successful. Returned', rows.length, 'sets');
 
                 // Get available years for the left menu
                 db.all("SELECT DISTINCT year as year FROM sets ORDER BY year DESC", [], (eYears, allYears) => {
-                    if (eYears) allYears = [];
+                    if (eYears) {
+                        console.error('\u274c Years query error:', eYears);
+                        allYears = [];
+                    }
 
                     res.render('index', {
                         sets: processedSets,
@@ -624,7 +674,12 @@ app.get('/logout', (req, res, next) => {
 app.get('/set/:set_num', (req, res) => {
     const setNum = req.params.set_num;
     db.get("SELECT s.*, t.name as theme_name FROM sets s LEFT JOIN themes t ON s.theme_id = t.id WHERE s.set_num = ?", [setNum], (err, set) => {
-        if (err) return res.status(500).send('Erro BD');
+        if (err) {
+            console.error('❌ Set detail query error:');
+            console.error('Set num:', setNum);
+            console.error('Error:', err);
+            return res.status(500).send('Erro BD');
+        }
         if (!set) {
             // If the set isn't in our DB, redirect to search results for that set_num
             return res.redirect('/?q=' + encodeURIComponent(setNum));
