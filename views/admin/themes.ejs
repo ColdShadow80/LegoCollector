@@ -29,31 +29,63 @@
             <input id="themeSearch" class="form-control form-control-sm w-50" placeholder="Procurar tema...">
         </div>
 
-        <table class="table table-striped bg-white shadow-sm rounded">
+        <table class="table table-striped bg-white shadow-sm rounded align-middle">
             <thead>
                 <tr>
-                    <th>ID</th>
-                    <th>Nome</th>
-                    <th>Sets</th>
-                    <th>Período</th>
+                    <th><a href="?sort=id&dir=<%= sort === 'id' && sortDir === 'ASC' ? 'desc' : 'asc' %>" class="text-decoration-none">ID<% if(sort==='id'){ %> <i class="bi bi-caret-<%= sortDir==='ASC'?'up':'down' %>-fill"></i><% } %></a></th>
+                    <th><a href="?sort=name&dir=<%= sort === 'name' && sortDir === 'ASC' ? 'desc' : 'asc' %>" class="text-decoration-none">Nome<% if(sort==='name'){ %> <i class="bi bi-caret-<%= sortDir==='ASC'?'up':'down' %>-fill"></i><% } %></a></th>
+                    <th><a href="?sort=total_sets&dir=<%= sort === 'total_sets' && sortDir === 'ASC' ? 'desc' : 'asc' %>" class="text-decoration-none">Sets<% if(sort==='total_sets'){ %> <i class="bi bi-caret-<%= sortDir==='ASC'?'up':'down' %>-fill"></i><% } %></a></th>
+                    <th><a href="?sort=total_pieces&dir=<%= sort === 'total_pieces' && sortDir === 'ASC' ? 'desc' : 'asc' %>" class="text-decoration-none">Peças<% if(sort==='total_pieces'){ %> <i class="bi bi-caret-<%= sortDir==='ASC'?'up':'down' %>-fill"></i><% } %></a></th>
+                    <th><a href="?sort=min_year&dir=<%= sort === 'min_year' && sortDir === 'ASC' ? 'desc' : 'asc' %>" class="text-decoration-none">Período<% if(sort==='min_year'){ %> <i class="bi bi-caret-<%= sortDir==='ASC'?'up':'down' %>-fill"></i><% } %></a></th>
+                    <th>Atualização Peças</th>
                     <th>Esconder?</th>
                     <th>Ações</th>
                 </tr>
             </thead>
             <tbody id="themesBody">
                 <% themes.forEach(t => { %>
-                <tr data-name="<%= t.name.toLowerCase() %>">
+                <% 
+                    var rowStyle = '';
+                    if (t.total_sets == 0) rowStyle = 'background:#fff3cd';
+                    else if (t.total_pieces == 0) rowStyle = 'background:#f8d7da';
+                    var updateToggleVal = (t.update_status === 'all' ? 0 : 1);
+                    var safeName = (t.name||'').replace(/'/g, "\\'");
+                    var checked = t.is_hidden ? 'checked' : '';
+                    var updateAllBtn = '';
+                    if (t.sets_count > 0) {
+                        updateAllBtn = '<button class="btn btn-sm btn-outline-secondary ms-2" onclick="toggleUpdateAll(' + t.id + ', ' + updateToggleVal + ')" title="Alternar atualização de peças para todos os sets"><i class="bi bi-arrow-repeat"></i></button>';
+                    }
+                    function escapeJsString(str) {
+                        return str.replace(/'/g, "\\'");
+                    }
+                %>
+                <tr data-name="<%= t.name.toLowerCase() %>" style="<%= rowStyle %>">
                     <td><%= t.id %></td>
                     <td><%= t.name %></td>
                     <td><%= t.total_sets %></td>
+                    <td><%= t.total_pieces %></td>
                     <td><%= t.min_year ? (t.min_year + (t.max_year && t.max_year !== t.min_year ? ' - ' + t.max_year : '')) : '' %></td>
                     <td>
+                        <% if (t.sets_count === 0) { %>
+                            <span class="badge bg-secondary">N/A</span>
+                        <% } else if (t.update_status === 'all') { %>
+                            <span class="badge bg-danger">Todos</span>
+                        <% } else if (t.update_status === 'none') { %>
+                            <span class="badge bg-success">Não</span>
+                        <% } else { %>
+                            <span class="badge bg-warning text-dark">Parcial</span>
+                            <span class="small">(<%= t.sets_count - t.ignore_parts_count %> ativos, <%= t.ignore_parts_count %> desativados)</span>
+                        <% } %>
+                        <%- updateAllBtn %>
+                    </td>
+                    <td>
                         <div class="form-check form-switch">
-                            <input class="form-check-input" type="checkbox" onchange="toggle(<%= t.id %>, 'is_hidden', this.checked)" <%= t.is_hidden ? 'checked' : '' %>>
+                            <input class="form-check-input" type="checkbox" onchange="toggle(<%#%>t.id<%#%>, 'is_hidden', this.checked)" <% if (t.is_hidden) { %>checked<% } %>>
                         </div>
                     </td>
                     <td>
-                        <button class="btn btn-sm btn-outline-primary" onclick="openEdit(<%= t.id %>, '<%= (t.name||'').replace(/'/g, "\\'") %>')">Editar</button>
+                        <% var tNameEscaped = (t.name||'').replace(/'/g, "\\'"); %>
+                        <button class="btn btn-sm btn-outline-primary" onclick="openEdit(<%#%>t.id<%#%>, '<%= tNameEscaped %>')">Editar</button>
                     </td>
                 </tr>
                 <% }) %>
@@ -70,7 +102,9 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
+                    <input id="newThemeId" class="form-control mb-2" placeholder="ID único (número)">
                     <input id="newThemeName" class="form-control" placeholder="Nome do tema">
+                    <div id="themeCreateError" class="alert alert-danger d-none mt-2"></div>
                 </div>
                 <div class="modal-footer">
                     <button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
@@ -114,15 +148,43 @@
             });
         });
 
+
         async function toggle(id, field, val) {
             await fetch('/admin/themes/toggle', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ theme_id: id, field: field, value: val }) });
         }
 
+        async function toggleUpdateAll(themeId, toDisable) {
+            await fetch('/admin/themes/toggle', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ theme_id: themeId, field: 'ignore_parts', value: toDisable, update_sets: true }) });
+            location.reload();
+        }
+
         document.getElementById('createThemeBtn').addEventListener('click', async () => {
+            const id = document.getElementById('newThemeId').value.trim();
             const name = document.getElementById('newThemeName').value.trim();
-            if (!name) return alert('Nome obrigatório');
-            const res = await fetch('/admin/themes/create', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ name }) });
-            if (res.ok) location.reload(); else alert('Erro');
+            const errorDiv = document.getElementById('themeCreateError');
+            errorDiv.classList.add('d-none');
+            if (!id || !/^[0-9]+$/.test(id)) {
+                errorDiv.textContent = 'ID obrigatório (número único)';
+                errorDiv.classList.remove('d-none');
+                return;
+            }
+            if (!name) {
+                errorDiv.textContent = 'Nome obrigatório';
+                errorDiv.classList.remove('d-none');
+                return;
+            }
+            const res = await fetch('/admin/themes/create', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ id, name }) });
+            const data = await res.json();
+            if (data && data.error === 'id_exists') {
+                errorDiv.textContent = 'ID já existe. Escolha outro.';
+                errorDiv.classList.remove('d-none');
+                return;
+            }
+            if (res.ok && data.success) location.reload();
+            else {
+                errorDiv.textContent = 'Erro ao criar tema.';
+                errorDiv.classList.remove('d-none');
+            }
         });
 
         function openEdit(id, name) {

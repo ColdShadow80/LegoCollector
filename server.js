@@ -755,19 +755,50 @@ app.post('/admin/barcodes/delete', ensureAdmin, express.json(), (req, res) => {
 });
 
 app.get('/admin/themes', ensureAdmin, (req, res) => {
-    db.all(`SELECT t.*, (SELECT COUNT(*) FROM sets WHERE theme_id = t.id) as total_sets, (SELECT MIN(year) FROM sets WHERE theme_id = t.id) as min_year, (SELECT MAX(year) FROM sets WHERE theme_id = t.id) as max_year FROM themes t ORDER BY t.name`, [], (err, rows) => {
+    // Sorting
+    const allowedSort = ['id','name','total_sets','total_pieces','min_year','max_year'];
+    let sort = req.query.sort || 'name';
+    let sortDir = req.query.dir === 'desc' ? 'DESC' : 'ASC';
+    if (!allowedSort.includes(sort)) sort = 'name';
+    const orderBy = `${sort} ${sortDir}`;
+
+    // Query all themes with set/part stats and update status
+    db.all(`
+        SELECT t.*,
+          (SELECT COUNT(*) FROM sets WHERE theme_id = t.id) as total_sets,
+          (SELECT IFNULL(SUM(num_parts),0) FROM sets WHERE theme_id = t.id) as total_pieces,
+          (SELECT MIN(year) FROM sets WHERE theme_id = t.id) as min_year,
+          (SELECT MAX(year) FROM sets WHERE theme_id = t.id) as max_year
+        FROM themes t
+        ORDER BY ${orderBy}
+    `, [], async (err, themes) => {
         if (err) return res.status(500).send('Erro Temas');
-        res.render('admin/themes', { themes: rows });
+        // For each theme, get ignore_parts status for all sets
+        for (const t of themes) {
+            const sets = await new Promise((resolve) => db.all("SELECT ignore_parts FROM sets WHERE theme_id = ?", [t.id], (e, s) => resolve(s||[])));
+            t.ignore_parts_count = sets.filter(s => s.ignore_parts).length;
+            t.update_status = 'none';
+            if (sets.length === 0) t.update_status = 'none';
+            else if (t.ignore_parts_count === sets.length) t.update_status = 'all';
+            else if (t.ignore_parts_count === 0) t.update_status = 'none';
+            else t.update_status = 'partial';
+            t.sets_count = sets.length;
+        }
+        res.render('admin/themes', { themes, sort, sortDir });
     });
 });
 
 // Create a new theme
 app.post('/admin/themes/create', ensureAdmin, express.json(), (req, res) => {
-    const { name } = req.body;
-    if (!name) return res.status(400).json({ error: 'missing_name' });
-    db.run("INSERT INTO themes (name) VALUES (?)", [name], function(err) {
+    const { id, name } = req.body;
+    if (!id || !name) return res.status(400).json({ error: 'missing_id_or_name' });
+    db.get("SELECT 1 FROM themes WHERE id = ?", [id], (err, exists) => {
         if (err) return res.status(500).json({ error: err.message });
-        db.get("SELECT * FROM themes WHERE id = ?", [this.lastID], (e, row) => res.json({ success: true, theme: row }));
+        if (exists) return res.status(400).json({ error: 'id_exists' });
+        db.run("INSERT INTO themes (id, name) VALUES (?, ?)", [id, name], function(err2) {
+            if (err2) return res.status(500).json({ error: err2.message });
+            db.get("SELECT * FROM themes WHERE id = ?", [id], (e, row) => res.json({ success: true, theme: row }));
+        });
     });
 });
 
@@ -786,16 +817,25 @@ app.post('/admin/themes/update', ensureAdmin, express.json(), (req, res) => {
 });
 
 // Toggle theme fields (is_hidden, etc.)
+// Toggle theme fields (is_hidden, etc.) and bulk update ignore_parts for all sets in theme
 app.post('/admin/themes/toggle', ensureAdmin, express.json(), (req, res) => {
-    const { theme_id, field, value } = req.body;
+    const { theme_id, field, value, update_sets } = req.body;
     if (!theme_id || !field) return res.status(400).json({ error: 'missing' });
     const val = (value === true || value === 'true' || value === 1 || value === '1') ? 1 : 0;
-    const allowed = ['is_hidden'];
+    const allowed = ['is_hidden','ignore_parts'];
     if (!allowed.includes(field)) return res.status(400).json({ error: 'invalid_field' });
-    db.run(`UPDATE themes SET ${field} = ? WHERE id = ?`, [val, theme_id], function(err) {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json({ success: true });
-    });
+    // If update_sets is true and field is ignore_parts, update all sets in theme
+    if (field === 'ignore_parts' && update_sets) {
+        db.run("UPDATE sets SET ignore_parts = ? WHERE theme_id = ?", [val, theme_id], function(err) {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ success: true });
+        });
+    } else {
+        db.run(`UPDATE themes SET ${field} = ? WHERE id = ?`, [val, theme_id], function(err) {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ success: true });
+        });
+    }
 });
 
 // Toggle set fields (is_hidden, ignore_parts)
