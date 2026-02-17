@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="pt" data-bs-theme="<%= (user && user.dark_mode) ? 'dark' : 'light' %>">
 <head>
     <meta charset="UTF-8">
@@ -6,7 +6,6 @@
     <title>LegoTracker V7</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
-    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
     <style>
         body { transition: background-color 0.3s, color 0.3s; }
         .set-card img { height: 160px; object-fit: contain; padding: 5px; transition: transform 0.2s; }
@@ -32,21 +31,16 @@
 
 <nav class="navbar navbar-expand-lg border-bottom mb-4">
     <div class="container-fluid px-4">
-        <a class="navbar-brand fw-bold" href="/">­ƒº▒ LegoTracker</a>
+        <a class="navbar-brand fw-bold" href="/">🧱 LegoTracker</a>
         
-                <div class="d-flex align-items-center gap-3">
+        <div class="d-flex align-items-center gap-3">
             <% if (user) { %>
-                        <div class="nav-item">
-                            <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#scannerModal" title="Abrir Scanner">
-                                <i class="bi bi-upc-scan"></i> Scan
-                            </button>
-                        </div>
                 <div class="form-check form-switch pt-1">
                     <input class="form-check-input" type="checkbox" id="darkModeSwitch" <%= user.dark_mode ? 'checked' : '' %>>
                     <label class="form-check-label"><i class="bi bi-moon-stars"></i></label>
                 </div>
                 <div class="dropdown">
-                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">­ƒæñ <%= user.name %></button>
+                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">👤 <%= user.name %></button>
                     <ul class="dropdown-menu dropdown-menu-end">
                         <% if (user.id === 1) { %>
                             <li><h6 class="dropdown-header">Admin</h6></li>
@@ -55,7 +49,7 @@
                             <li><a class="dropdown-item" href="/admin/users">Users</a></li>
                             <li><hr class="dropdown-divider"></li>
                         <% } %>
-                        <li><a class="dropdown-item" href="/?status=owned">Minha Cole├º├úo</a></li>
+                        <li><a class="dropdown-item" href="/?status=owned">Minha Coleção</a></li>
                         <li><a class="dropdown-item" href="/?status=wanted">Lista de Desejos</a></li>
                         <li><hr class="dropdown-divider"></li>
                         <li><a class="dropdown-item text-danger" href="/logout">Sair</a></li>
@@ -128,7 +122,7 @@
                 </select>
             </div>
 
-            <% let lastTheme = null; if (sets.length === 0) { %><div class="text-center py-5 text-muted"><h3>­ƒæ╗</h3><p>Nada.</p></div><% } %>
+            <% let lastTheme = null; if (sets.length === 0) { %><div class="text-center py-5 text-muted"><h3>👻</h3><p>Nada.</p></div><% } %>
 
             <div class="accordion" id="accordionThemes">
             <% sets.forEach((set, index) => { 
@@ -155,7 +149,7 @@
                         <div class="card-body p-2 d-flex flex-column text-center">
                             <h6 class="card-title text-truncate small mb-1" title="<%= set.name %>"><%= set.name %></h6>
                             <div class="small text-muted mb-2" style="font-size: 0.75rem;">
-                                <span class="fw-bold text-primary">#<%= set.set_num %></span> ÔÇó <%= set.year %> ÔÇó <%= set.num_parts %> p├ºs
+                                <span class="fw-bold text-primary">#<%= set.set_num %></span> • <%= set.year %> • <%= set.num_parts %> pçs
                             </div>
                             <div class="mt-auto card-actions d-flex justify-content-center gap-2">
                                 <a href="/set/<%= set.set_num %>" class="btn btn-outline-secondary" title="Ver Detalhes"><i class="bi bi-eye"></i></a>
@@ -167,7 +161,7 @@
                                     </button>
                                     
                                     <button class="btn <%= set.user_status === 'OWNED' ? 'btn-success' : 'btn-outline-success' %>" 
-                                            onclick="toggleStatus('<%= set.set_num %>', 'OWNED')" title="Minha Cole├º├úo">
+                                            onclick="toggleStatus('<%= set.set_num %>', 'OWNED')" title="Minha Coleção">
                                         <i class="bi <%= set.user_status === 'OWNED' ? 'bi-check-lg' : 'bi-plus-lg' %>"></i>
                                     </button>
                                 <% } %>
@@ -198,24 +192,8 @@
     </div>
 </div>
 
-            <!-- Scanner Modal -->
-            <div class="modal fade" id="scannerModal" tabindex="-1">
-                <div class="modal-dialog">
-                    <div class="modal-content">
-                        <div class="modal-header">
-                            <h5 class="modal-title">Scanner de Código de Barras</h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                        </div>
-                        <div class="modal-body text-center">
-                            <div id="reader" style="width: 100%;"></div>
-                            <p class="mt-2 text-muted small">Aponte a câmera para o código de barras da caixa.</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-        <script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
     document.getElementById('themeSearchInput').addEventListener('keyup', function(e) {
         const term = e.target.value.toLowerCase();
         document.querySelectorAll('.theme-item').forEach(item => {
@@ -234,7 +212,7 @@
     async function savePref(k, v) { try{ fetch('/api/preferences', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({[k]:v})}); }catch(e){} }
 
     async function toggleStatus(setNum, targetStatus) {
-        // Se clicar em Owned e j├í for Owned, ou Wanted e j├í for Wanted -> Remove
+        // Se clicar em Owned e já for Owned, ou Wanted e já for Wanted -> Remove
         const card = document.getElementById('card-' + setNum);
         const currentStatus = card.classList.contains('is-owned') ? 'OWNED' : (card.classList.contains('is-wanted') ? 'WANTED' : null);
         
@@ -243,38 +221,9 @@
 
         try {
             const res = await fetch('/api/toggle', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({set_num: setNum, status: newStatus})});
-            if (res.ok) window.location.reload(); // Refresh para atualizar ├¡cones corretamente
+            if (res.ok) window.location.reload(); // Refresh para atualizar ícones corretamente
         } catch(e) { alert('Erro'); }
     }
-    
-    // Scanner integration (uses html5-qrcode)
-    (function() {
-        const scannerModal = document.getElementById('scannerModal');
-        let html5QrcodeScanner = null;
-
-        if (scannerModal) {
-            scannerModal.addEventListener('shown.bs.modal', () => {
-                if (!html5QrcodeScanner) {
-                    html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
-                    html5QrcodeScanner.render(onScanSuccess);
-                }
-            });
-
-            scannerModal.addEventListener('hidden.bs.modal', () => {
-                if (html5QrcodeScanner) {
-                    try { html5QrcodeScanner.clear(); } catch(e){}
-                    html5QrcodeScanner = null;
-                    document.getElementById('reader').innerHTML = '';
-                }
-            });
-        }
-
-        function onScanSuccess(decodedText, decodedResult) {
-            // Redirect to search with decoded text
-            window.location.href = `/?q=${encodeURIComponent(decodedText)}`;
-        }
-    })();
 </script>
 </body>
 </html>
-
