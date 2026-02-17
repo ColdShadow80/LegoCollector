@@ -46,7 +46,12 @@
                 <% sets.forEach(set => { %>
                 <tr data-term="<%= (set.set_num + ' ' + (set.name||'')).toLowerCase() %>">
                     <td><%= set.set_num %></td>
-                    <td><%= set.name %></td>
+                    <td>
+                        <% if (set.img_url) { %>
+                            <img src="<%= set.img_url %>" alt="img" style="height:32px;width:auto;max-width:48px;object-fit:contain;vertical-align:middle;margin-right:6px;">
+                        <% } %>
+                        <%= set.name %>
+                    </td>
                     <td><%= set.year %></td>
                     <td><%= set.num_parts %></td>
                     <td><%= set.price_eur ? ('€' + set.price_eur) : '' %></td>
@@ -122,12 +127,21 @@
         }
 
         function openEdit(setNum, name, year, price) {
+            // Find the row for this set
+            const row = Array.from(document.querySelectorAll('#setsBody tr')).find(r => r.querySelector('td') && r.querySelector('td').textContent.trim() === setNum);
+            let is_hidden = false, ignore_parts = false;
+            if (row) {
+                const hideSwitch = row.querySelector('input[type="checkbox"][onchange*="is_hidden"]');
+                const ignoreSwitch = row.querySelector('input[type="checkbox"][onchange*="ignore_parts"]');
+                is_hidden = hideSwitch ? hideSwitch.checked : false;
+                ignore_parts = ignoreSwitch ? ignoreSwitch.checked : false;
+            }
             document.getElementById('editSetNum').value = setNum;
             document.getElementById('editSetName').value = name || '';
             document.getElementById('editSetYear').value = year || '';
             document.getElementById('editSetPrice').value = price || '';
-            document.getElementById('editSetHidden').checked = false;
-            document.getElementById('editSetIgnoreParts').checked = false;
+            document.getElementById('editSetHidden').checked = is_hidden;
+            document.getElementById('editSetIgnoreParts').checked = ignore_parts;
             new bootstrap.Modal(document.getElementById('editSetModal')).show();
         }
 
