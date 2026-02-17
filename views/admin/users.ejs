@@ -11,6 +11,9 @@
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h3>👥 Gestão de Utilizadores</h3>
         <div>
+            <button class="btn btn-success btn-sm me-2" data-bs-toggle="modal" data-bs-target="#createUserModal">
+                <i class="bi bi-person-plus"></i> Novo Utilizador
+            </button>
             <a href="/admin/sets" class="btn btn-outline-secondary btn-sm me-2">Sets</a>
             <a href="/admin/themes" class="btn btn-outline-secondary btn-sm me-2">Temas</a>
             <a href="/admin/barcodes" class="btn btn-outline-secondary btn-sm me-2">Códigos de Barras</a>
@@ -101,6 +104,45 @@
         </div>
     </div>
 
+    <!-- Create User Modal -->
+    <div class="modal fade" id="createUserModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Criar Novo Utilizador</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="createUserForm">
+                        <div class="mb-3">
+                            <label for="newUserName" class="form-label">Nome *</label>
+                            <input type="text" class="form-control" id="newUserName" required placeholder="p.e., João Silva">
+                        </div>
+                        <div class="mb-3">
+                            <label for="newUserEmail" class="form-label">Email *</label>
+                            <input type="email" class="form-control" id="newUserEmail" required placeholder="usuario@example.com">
+                        </div>
+                        <div class="mb-3">
+                            <label for="newUserPassword" class="form-label">Palavra-passe *</label>
+                            <input type="password" class="form-control" id="newUserPassword" required placeholder="Mínimo 6 caracteres">
+                            <div class="form-text">Insira uma palavra-passe com pelo menos 6 caracteres</div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="newUserPasswordConfirm" class="form-label">Confirmar Palavra-passe *</label>
+                            <input type="password" class="form-control" id="newUserPasswordConfirm" required placeholder="Repita a palavra-passe">
+                        </div>
+                        <div id="createUserError" class="alert alert-danger d-none" role="alert"></div>
+                        <div id="createUserSuccess" class="alert alert-success d-none" role="alert"></div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-success" id="createUserBtn" onclick="createUser()">Criar Utilizador</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         async function resetPass(id, type) {
             if(!confirm('Tem a certeza que deseja repor a palavra-passe deste utilizador?')) return;
@@ -132,6 +174,79 @@
             document.execCommand("copy");
             alert("Link copiado!");
         }
+
+        async function createUser() {
+            const name = document.getElementById('newUserName').value.trim();
+            const email = document.getElementById('newUserEmail').value.trim();
+            const password = document.getElementById('newUserPassword').value;
+            const passwordConfirm = document.getElementById('newUserPasswordConfirm').value;
+            const errorDiv = document.getElementById('createUserError');
+            const successDiv = document.getElementById('createUserSuccess');
+            const btn = document.getElementById('createUserBtn');
+
+            // Clear previous messages
+            errorDiv.classList.add('d-none');
+            successDiv.classList.add('d-none');
+
+            // Validation
+            if (!name || !email || !password || !passwordConfirm) {
+                errorDiv.textContent = '❌ Todos os campos são obrigatórios.';
+                errorDiv.classList.remove('d-none');
+                return;
+            }
+
+            if (password.length < 6) {
+                errorDiv.textContent = '❌ A palavra-passe deve ter pelo menos 6 caracteres.';
+                errorDiv.classList.remove('d-none');
+                return;
+            }
+
+            if (password !== passwordConfirm) {
+                errorDiv.textContent = '❌ As palavras-passe não coincidem.';
+                errorDiv.classList.remove('d-none');
+                return;
+            }
+
+            // Disable button and show loading state
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Criando...';
+
+            try {
+                const res = await fetch('/admin/users/create', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, email, password })
+                });
+
+                const data = await res.json();
+
+                if (data.error) {
+                    errorDiv.textContent = '❌ ' + data.error;
+                    errorDiv.classList.remove('d-none');
+                } else {
+                    successDiv.innerHTML = '✅ Utilizador criado com sucesso! A página vai recarregar em 2 segundos...';
+                    successDiv.classList.remove('d-none');
+                    setTimeout(() => {
+                        location.reload();
+                    }, 2000);
+                }
+            } catch (e) {
+                errorDiv.textContent = '❌ Erro ao comunicar com o servidor.';
+                errorDiv.classList.remove('d-none');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = 'Criar Utilizador';
+            }
+        }
+
+        // Allow form submission with Enter key
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('newUserPasswordConfirm').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    createUser();
+                }
+            });
+        });
     </script>
 </body>
 </html>

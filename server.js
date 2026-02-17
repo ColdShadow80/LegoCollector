@@ -529,6 +529,54 @@ app.post('/admin/users/reset', ensureAdmin, express.json(), (req, res) => {
     });
 });
 
+// Create new user (admin only)
+app.post('/admin/users/create', ensureAdmin, express.json(), (req, res) => {
+    const { name, email, password } = req.body;
+
+    // Validate input
+    if (!name || !email || !password) {
+        return res.status(400).json({ error: 'Nome, email e palavra-passe são obrigatórios.' });
+    }
+
+    if (password.length < 6) {
+        return res.status(400).json({ error: 'A palavra-passe deve ter pelo menos 6 caracteres.' });
+    }
+
+    // Check if email already exists
+    db.get("SELECT id FROM users WHERE email = ?", [email], (err, existingUser) => {
+        if (err) {
+            return res.status(500).json({ error: 'Erro ao verificar email.' });
+        }
+
+        if (existingUser) {
+            return res.status(400).json({ error: 'Este email já está registado.' });
+        }
+
+        // Hash password and create user
+        bcrypt.hash(password, 10, (hashErr, hashedPassword) => {
+            if (hashErr) {
+                return res.status(500).json({ error: 'Erro ao processar palavra-passe.' });
+            }
+
+            db.run(
+                "INSERT INTO users (name, email, password, is_verified) VALUES (?, ?, ?, 1)",
+                [name, email, hashedPassword],
+                function(insertErr) {
+                    if (insertErr) {
+                        return res.status(500).json({ error: 'Erro ao criar utilizador.' });
+                    }
+
+                    res.json({
+                        success: true,
+                        message: 'Utilizador criado com sucesso.',
+                        user_id: this.lastID
+                    });
+                }
+            );
+        });
+    });
+});
+
 // Forgot password (public)
 app.get('/forgot', (req, res) => res.render('forgot'));
 app.post('/forgot', (req, res) => {
