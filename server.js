@@ -5,6 +5,7 @@ const SQLiteStore = require('connect-sqlite3')(session);
 const passport = require('passport');
 const LocalStrategy = require('passport-local').Strategy;
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
+const util = require('util');
 const bcrypt = require('bcrypt');
 const crypto = require('crypto');
 const cron = require('node-cron');     // Restaurado
@@ -90,11 +91,11 @@ passport.use(new LocalStrategy({ usernameField: 'email' }, (email, password, don
 }));
 
 if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
-    passport.use(new GoogleStrategy({
-        clientID: process.env.GOOGLE_CLIENT_ID,
-        clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-        callbackURL: "/auth/google/callback"
-      },
+        passport.use(new GoogleStrategy({
+                clientID: process.env.GOOGLE_CLIENT_ID,
+                clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+                callbackURL: process.env.GOOGLE_CALLBACK_URL || "/auth/google/callback"
+            },
       (accessToken, refreshToken, profile, done) => {
         try {
           console.log('GoogleStrategy: profile received', profile && profile.id);
@@ -570,16 +571,32 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
     app.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
     // Use explicit callback to handle strategy errors gracefully
     app.get('/auth/google/callback', (req, res, next) => {
+        // Dump incoming query (code/state/error) to help debug token exchange issues
+        console.log('Google callback req.query:', util.inspect(req.query, { depth: 2 }));
+
         passport.authenticate('google', (err, user, info) => {
-            if (err) {
-                console.error('Google auth error:', err && err.stack ? err.stack : err);
-                console.error('Google auth info (if any):', info);
+            // If there's an error but a user was returned, proceed but log a warning and dump details.
+            if (err && !user) {
+                console.error('Google auth error (fatal):', util.inspect(err, { depth: null }));
+                if (err && err.data) console.error('Google error data:', util.inspect(err.data, { depth: null }));
+                console.error('Google auth info (if any):', util.inspect(info, { depth: 3 }));
+                console.error('Incoming headers (subset):', {
+                    host: req.headers.host,
+                    referer: req.headers.referer,
+                    'user-agent': req.headers['user-agent']
+                });
                 return res.redirect('/login?error=google_error');
             }
+            if (err && user) {
+                console.warn('Google auth returned an error but also a user — proceeding. Error dump:', util.inspect(err, { depth: null }));
+                if (err && err.data) console.warn('Google error data:', util.inspect(err.data, { depth: null }));
+            }
+
             if (!user) {
-                console.error('Google auth returned no user. Info:', info);
+                console.error('Google auth returned no user. Info:', util.inspect(info, { depth: 3 }));
                 return res.redirect('/login?error=google_failed');
             }
+
             req.logIn(user, (e) => {
                 if (e) { console.error('Login after Google error', e); return res.redirect('/login?error=login_failed'); }
                 console.log('Google login successful for user', user.id);
