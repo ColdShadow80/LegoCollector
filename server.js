@@ -361,10 +361,69 @@ app.get('/admin/users', ensureAdmin, (req, res) => {
 });
 
 app.post('/admin/users/reset', ensureAdmin, express.json(), (req, res) => {
+    const { user_id, type } = req.body;
+    // generate reset token and save on user
     const token = crypto.randomBytes(20).toString('hex');
-    const link = `http://${req.headers.host}/reset/${token}`;
-    // Aqui poderia atualizar a BD com o reset_token
-    res.json({ success: true, link: link });
+    const expires = Date.now() + (60 * 60 * 1000); // 1 hour
+    db.get("SELECT email FROM users WHERE id = ?", [user_id], (e, u) => {
+        if (e || !u) return res.status(400).json({ error: 'not_found' });
+        db.run("UPDATE users SET reset_token = ?, reset_expires = ? WHERE id = ?", [token, expires, user_id], function(err) {
+            if (err) return res.status(500).json({ error: err.message });
+            const link = `http://${req.headers.host}/reset/${token}`;
+            if (type === 'email') {
+                sendEmail(u.email, 'Reset Password', `Use this link to reset your password: ${link}`);
+                return res.json({ success: true });
+            }
+            return res.json({ success: true, link });
+        });
+    });
+});
+
+// Forgot password (public)
+app.get('/forgot', (req, res) => res.render('forgot'));
+app.post('/forgot', (req, res) => {
+    const { email } = req.body;
+    if (!email) return res.render('forgot', { error: 'Email obrigatório' });
+    db.get("SELECT id, email FROM users WHERE email = ?", [email], (err, user) => {
+        if (err) return res.render('forgot', { error: 'Erro servidor' });
+        if (!user) return res.render('forgot', { error: 'Conta não encontrada' });
+        const token = crypto.randomBytes(20).toString('hex');
+        const expires = Date.now() + (60 * 60 * 1000);
+        db.run("UPDATE users SET reset_token = ?, reset_expires = ? WHERE id = ?", [token, expires, user.id], function(eu) {
+            if (eu) return res.render('forgot', { error: 'Erro servidor' });
+            const link = `http://${req.headers.host}/reset/${token}`;
+            sendEmail(user.email, 'Reset Password', `Clique para redefinir a password: ${link}`);
+            return res.redirect('/login?success=reset_sent');
+        });
+    });
+});
+
+// Render reset form
+app.get('/reset/:token', (req, res) => {
+    const token = req.params.token;
+    db.get("SELECT id, reset_expires FROM users WHERE reset_token = ?", [token], (err, u) => {
+        if (err || !u) return res.redirect('/login?error=Token inválido');
+        if (!u.reset_expires || u.reset_expires < Date.now()) return res.redirect('/login?error=Token expirado');
+        res.render('reset', { token });
+    });
+});
+
+// Apply new password
+app.post('/reset/:token', async (req, res) => {
+    const token = req.params.token;
+    const password = req.body.password;
+    if (!password) return res.redirect('/login?error=missing_password');
+    db.get("SELECT id, reset_expires FROM users WHERE reset_token = ?", [token], async (err, u) => {
+        if (err || !u) return res.redirect('/login?error=Token inválido');
+        if (!u.reset_expires || u.reset_expires < Date.now()) return res.redirect('/login?error=Token expirado');
+        try {
+            const hashed = await bcrypt.hash(password, 10);
+            db.run("UPDATE users SET password = ?, reset_token = NULL, reset_expires = NULL WHERE id = ?", [hashed, u.id], function(er) {
+                if (er) return res.redirect('/login?error=Erro');
+                return res.redirect('/login?success=PasswordAlterada');
+            });
+        } catch(e) { return res.redirect('/login?error=Erro'); }
+    });
 });
 
 app.get('/admin/sets', ensureAdmin, (req, res) => {
@@ -473,7 +532,20 @@ app.post('/login', passport.authenticate('local', {
 }));
 if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
     app.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
-    app.get('/auth/google/callback', passport.authenticate('google', { failureRedirect: '/login' }), (req, res) => res.redirect('/'));
+    // Use explicit callback to handle strategy errors gracefully
+    app.get('/auth/google/callback', (req, res, next) => {
+        passport.authenticate('google', (err, user, info) => {
+            if (err) {
+                console.error('Google auth error:', err);
+                return res.redirect('/login?error=google_error');
+            }
+            if (!user) return res.redirect('/login?error=google_failed');
+            req.logIn(user, (e) => {
+                if (e) { console.error('Login after Google error', e); return res.redirect('/login?error=login_failed'); }
+                return res.redirect('/');
+            });
+        })(req, res, next);
+    });
 } else {
     // Provide safe fallback routes when Google OAuth is not configured
     app.get('/auth/google', (req, res) => res.redirect('/login?error=google_not_configured'));
