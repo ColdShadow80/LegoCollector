@@ -26,6 +26,14 @@
         [data-bs-theme="dark"] .pagination-select { color: white; background-color: #212529; }
         
         .card-actions .btn { border-radius: 50%; width: 32px; height: 32px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+        
+        /* Responsive filters: desktop sidebar + mobile drawer */
+        .sidebar-container { display: block; }
+        .sidebar-drawer { display: none; }
+        @media (max-width: 767.98px) {
+            .sidebar-container { display: none; }
+            .sidebar-drawer { display: block; }
+        }
     </style>
 </head>
 <body>
@@ -69,8 +77,16 @@
 </nav>
 
 <div class="container-fluid px-4">
+    <!-- Mobile Filter Button -->
+    <div class="d-lg-none d-flex justify-content-between align-items-center mb-3">
+        <span class="text-muted small"><%= pagination.totalItems %> sets</span>
+        <button class="btn btn-outline-primary btn-sm" data-bs-toggle="offcanvas" data-bs-target="#filtersOffcanvas" title="Abrir Filtros">
+            <i class="bi bi-funnel"></i> Filtros
+        </button>
+    </div>
+    
     <div class="row">
-        <div class="col-md-3 col-lg-2 mb-4">
+        <div class="col-md-3 col-lg-2 mb-4 sidebar-container">
             <form action="/" method="GET" id="filterForm">
                 <div class="d-grid gap-2 mb-3">
                     <button type="submit" class="btn btn-primary btn-sm">Aplicar</button>
@@ -201,6 +217,86 @@
     </div>
 </div>
 
+    <!-- Mobile Filters Offcanvas (drawer) -->
+    <div class="offcanvas offcanvas-start sidebar-drawer" tabindex="-1" id="filtersOffcanvas">
+        <div class="offcanvas-header border-bottom">
+            <h5 class="offcanvas-title">Filtros</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
+        </div>
+        <div class="offcanvas-body p-0">
+            <form action="/" method="GET" id="filterFormMobile" class="d-flex flex-column h-100">
+                <div class="flex-grow-1 overflow-y-auto p-3">
+                    <!-- Estado -->
+                    <div class="mb-3">
+                        <label class="small fw-bold">Estado</label>
+                        <select name="status" class="form-select form-select-sm">
+                            <option value="">Tudo</option>
+                            <option value="owned" <%= query.status == 'owned' ? 'selected' : '' %>>Tenho</option>
+                            <option value="wanted" <%= query.status == 'wanted' ? 'selected' : '' %>>Quero</option>
+                        </select>
+                    </div>
+
+                    <!-- Pesquisa -->
+                    <div class="mb-3">
+                        <label class="small fw-bold">Pesquisa</label>
+                        <input type="text" name="q" class="form-control form-control-sm" value="<%= query.search || '' %>" placeholder="Nome ou número">
+                    </div>
+
+                    <!-- Ano -->
+                    <div class="mb-3">
+                        <label class="small fw-bold">Ano</label>
+                        <select name="year" class="form-select form-select-sm">
+                            <option value="">Todos</option>
+                            <% allYears.forEach(y => { %>
+                                <option value="<%= y.year %>" <%= query.year == y.year ? 'selected' : '' %>><%= y.year %></option>
+                            <% }) %>
+                        </select>
+                    </div>
+
+                    <!-- Temas em Accordion -->
+                    <div class="mb-3">
+                        <label class="small fw-bold d-block mb-2">Temas</label>
+                        <input type="text" id="themeSearchInputMobile" class="form-control form-control-sm mb-2" placeholder="Filtrar temas...">
+                        <div class="accordion accordion-flush" id="themesAccordion">
+                            <% allThemes.forEach((t, idx) => { %>
+                                <div class="accordion-item theme-item-mobile">
+                                    <h2 class="accordion-header">
+                                        <button class="accordion-button collapsed p-2" type="button" data-bs-toggle="collapse" data-bs-target="#t-collapse-<%= idx %>">
+                                            <small class="label-text"><%= t.name %></small>
+                                            <% if (t.min_year) { %>
+                                                <small class="text-muted ms-auto"><%= t.min_year %><%= t.min_year !== t.max_year ? ' - ' + t.max_year : '' %></small>
+                                            <% } %>
+                                        </button>
+                                    </h2>
+                                    <div id="t-collapse-<%= idx %>" class="accordion-collapse collapse" data-bs-parent="#themesAccordion">
+                                        <div class="accordion-body p-2">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" name="themes" value="<%= t.id %>" id="tm-<%= t.id %>"
+                                                <% if (query.themes && (query.themes == t.id || (Array.isArray(query.themes) && query.themes.includes(String(t.id))))) { %> checked <% } %>>
+                                                <label class="form-check-label small" for="tm-<%= t.id %>">
+                                                    Selecionar
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            <% }) %>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Botões fixos no fundo do offcanvas -->
+                <div class="p-3 border-top bg-body sticky-bottom d-grid gap-2">
+                    <button type="submit" class="btn btn-primary btn-sm">Aplicar Filtros</button>
+                    <a href="/" class="btn btn-outline-secondary btn-sm">Limpar Filtros</a>
+                </div>
+
+                <input type="hidden" name="limit" id="limitInputMobile" value="<%= pagination.limit %>">
+                <input type="hidden" name="page" value="<%= pagination.page %>">
+            </form>
+        </div>
+    </div>
+
             <!-- Scanner Modal -->
             <div class="modal fade" id="scannerModal" tabindex="-1">
                 <div class="modal-dialog">
@@ -321,9 +417,19 @@
             }
         }
     })();
-    document.getElementById('themeSearchInput').addEventListener('keyup', function(e) {
+    // Desktop theme search
+    document.getElementById('themeSearchInput')?.addEventListener('keyup', function(e) {
         const term = e.target.value.toLowerCase();
         document.querySelectorAll('.theme-item').forEach(item => {
+            const text = item.querySelector('.label-text').textContent.toLowerCase();
+            item.style.display = text.includes(term) ? '' : 'none';
+        });
+    });
+
+    // Mobile theme search (accordion)
+    document.getElementById('themeSearchInputMobile')?.addEventListener('keyup', function(e) {
+        const term = e.target.value.toLowerCase();
+        document.querySelectorAll('.theme-item-mobile').forEach(item => {
             const text = item.querySelector('.label-text').textContent.toLowerCase();
             item.style.display = text.includes(term) ? '' : 'none';
         });
