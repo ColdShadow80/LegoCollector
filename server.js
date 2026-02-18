@@ -1,3 +1,26 @@
+// Barcode and Set Search API for Scanner Modal
+app.get('/api/barcode-lookup/:code', (req, res) => {
+    const code = req.params.code;
+    db.get("SELECT set_num FROM barcodes WHERE code = ?", [code], (err, row) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!row || !row.set_num) return res.json({ found: false });
+        db.get("SELECT set_num, name, img_url FROM sets WHERE set_num = ?", [row.set_num], (err2, set) => {
+            if (err2) return res.status(500).json({ error: err2.message });
+            if (!set) return res.json({ found: false });
+            res.json({ found: true, set });
+        });
+    });
+});
+
+// Search sets by partial set_num or name (for teaching barcode)
+app.get('/api/set-search', (req, res) => {
+    const q = req.query.q ? req.query.q.trim() : '';
+    if (!q) return res.json({ results: [] });
+    db.all("SELECT set_num, name, img_url FROM sets WHERE set_num LIKE ? OR name LIKE ? LIMIT 10", [`%${q}%`, `%${q}%`], (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ results: rows });
+    });
+});
 require('dotenv').config();
 const express = require('express');
 const session = require('express-session');

@@ -360,11 +360,12 @@
                                     <input type="text" id="scannedCode" class="form-control form-control-sm" readonly>
                                 </div>
                                 <div class="mb-2">
-                                    <label class="small text-muted">Abrir pesquisa</label>
+                                    <label class="small text-muted">Pesquisar código</label>
                                     <div class="d-flex gap-2">
-                                        <button id="openSearchBtn" class="btn btn-outline-primary btn-sm flex-grow-1">Abrir</button>
+                                        <button id="searchBarcodeBtn" class="btn btn-primary btn-sm flex-grow-1">Pesquisar</button>
                                         <button id="copyCodeBtn" class="btn btn-outline-secondary btn-sm">Copiar</button>
                                     </div>
+                                    <div id="barcodeSearchResult" class="mt-2"></div>
                                 </div>
 
                                 <% if (user) { %>
@@ -424,9 +425,23 @@
             if (scannedCode) scannedCode.value = decodedText;
             if (scanResult) scanResult.classList.remove('d-none');
 
-            // Wire buttons (idempotent)
-            document.getElementById('openSearchBtn')?.addEventListener('click', () => {
-                window.location.href = `/?q=${encodeURIComponent(decodedText)}`;
+            // Wire search button
+            const barcodeSearchResult = document.getElementById('barcodeSearchResult');
+            document.getElementById('searchBarcodeBtn')?.addEventListener('click', async () => {
+                if (barcodeSearchResult) {
+                    barcodeSearchResult.innerHTML = '<span class="text-muted small">Pesquisando...</span>';
+                    try {
+                        const res = await fetch(`/api/barcode-lookup/${encodeURIComponent(decodedText)}`);
+                        const data = await res.json();
+                        if (data.found && data.set) {
+                            barcodeSearchResult.innerHTML = `<div class='alert alert-success p-2 d-flex align-items-center gap-2'><img src='${data.set.img_url || 'https://via.placeholder.com/60'}' style='height:40px;width:auto;border-radius:4px;'> <div><b>${data.set.name}</b><br><span class='text-muted small'>ID: ${data.set.set_num}</span><br><a href='/set/${encodeURIComponent(data.set.set_num)}' class='btn btn-sm btn-outline-primary mt-1'>Ver detalhes</a></div></div>`;
+                        } else {
+                            barcodeSearchResult.innerHTML = `<div class='alert alert-warning p-2'>Nenhum set encontrado para este código.<br>Você pode ensinar o sistema abaixo.</div>`;
+                        }
+                    } catch(e) {
+                        barcodeSearchResult.innerHTML = '<span class="text-danger small">Erro ao pesquisar.</span>';
+                    }
+                }
             });
 
             document.getElementById('copyCodeBtn')?.addEventListener('click', async () => {
@@ -441,19 +456,54 @@
                     const feedback = document.getElementById('teachFeedback');
                     if (!setNum) { if (feedback) feedback.textContent = 'Digite o número do set.'; return; }
                     teachBtn.disabled = true;
-                    if (feedback) feedback.textContent = 'Enviando...';
+                    if (feedback) feedback.textContent = 'Verificando...';
                     try {
-                        const res = await fetch('/api/barcode/teach', {
-                            method: 'POST', headers: {'Content-Type':'application/json'},
-                            body: JSON.stringify({ code: decodedText, set_num: setNum })
-                        });
-                        if (res.status === 401) {
-                            if (feedback) feedback.textContent = 'Inicie sessão para ensinar códigos.';
-                        } else if (res.ok) {
-                            if (feedback) feedback.textContent = 'Mapeamento salvo.';
+                        // Check for exact match
+                        let res = await fetch(`/api/set-search?q=${encodeURIComponent(setNum)}`);
+                        let data = await res.json();
+                        if (data.results && data.results.length > 0) {
+                            const exact = data.results.find(s => s.set_num === setNum);
+                            if (exact) {
+                                // Save mapping
+                                feedback.textContent = 'Salvando mapeamento...';
+                                let saveRes = await fetch('/api/barcode/teach', {
+                                    method: 'POST', headers: {'Content-Type':'application/json'},
+                                    body: JSON.stringify({ code: decodedText, set_num: setNum })
+                                });
+                                if (saveRes.status === 401) {
+                                    feedback.textContent = 'Inicie sessão para ensinar códigos.';
+                                } else if (saveRes.ok) {
+                                    feedback.textContent = 'Mapeamento salvo.';
+                                } else {
+                                    const txt = await saveRes.text();
+                                    feedback.textContent = 'Erro: ' + (txt || saveRes.status);
+                                }
+                            } else {
+                                // Show partial matches for user to select
+                                feedback.innerHTML = 'Nenhum set exato encontrado. Selecione abaixo:<ul>' +
+                                    data.results.map(s => `<li><a href="#" class="set-sel" data-setnum="${s.set_num}">${s.set_num} - ${s.name}</a></li>`).join('') + '</ul>';
+                                document.querySelectorAll('.set-sel').forEach(el => {
+                                    el.onclick = async (e) => {
+                                        e.preventDefault();
+                                        const chosen = el.getAttribute('data-setnum');
+                                        feedback.textContent = 'Salvando mapeamento...';
+                                        let saveRes = await fetch('/api/barcode/teach', {
+                                            method: 'POST', headers: {'Content-Type':'application/json'},
+                                            body: JSON.stringify({ code: decodedText, set_num: chosen })
+                                        });
+                                        if (saveRes.status === 401) {
+                                            feedback.textContent = 'Inicie sessão para ensinar códigos.';
+                                        } else if (saveRes.ok) {
+                                            feedback.textContent = 'Mapeamento salvo.';
+                                        } else {
+                                            const txt = await saveRes.text();
+                                            feedback.textContent = 'Erro: ' + (txt || saveRes.status);
+                                        }
+                                    };
+                                });
+                            }
                         } else {
-                            const txt = await res.text();
-                            if (feedback) feedback.textContent = 'Erro: ' + (txt || res.status);
+                            feedback.textContent = 'Nenhum set encontrado.';
                         }
                     } catch(e) {
                         if (feedback) feedback.textContent = 'Erro de rede.';
