@@ -22,6 +22,18 @@ function addColumn(table, columnDef) {
 db.serialize(() => {
     // --- 1. CRIAR TABELAS (Se não existirem) ---
 
+    db.run(`CREATE TABLE IF NOT EXISTS user_share_links (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        token TEXT UNIQUE,
+        type TEXT CHECK(type IN ('OWNED','WANTED','BOTH')),
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        expires_at DATETIME,
+        last_used DATETIME,
+        is_revoked INTEGER DEFAULT 0,
+        FOREIGN KEY (user_id) REFERENCES users(id)
+    )`);
+
     db.run(`CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT,

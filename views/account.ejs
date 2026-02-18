@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <title>Minha Conta</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+    <nav class="navbar navbar-dark bg-dark mb-4 px-3">
+        <a class="navbar-brand" href="/">🧱 Admin Painel</a>
+        <div class="d-flex flex-column flex-md-row gap-2 align-items-md-center">
+            <a href="/" class="btn btn-outline-light btn-sm me-2">Voltar ao Site</a>
+        </div>
+    </nav>
+    <div class="container">
+        <h3>Minha Conta</h3>
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card mb-4">
+                    <div class="card-body">
+                        <h5 class="card-title">Informação Básica</h5>
+                        <ul class="list-group list-group-flush">
+                            <li class="list-group-item">Nome: <span id="userName">...</span></li>
+                            <li class="list-group-item">Email: <span id="userEmail">...</span></li>
+                            <li class="list-group-item">Registo: <span id="userRegistered">...</span></li>
+                            <li class="list-group-item">Último login: <span id="userLastLogin">...</span></li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="card mb-4">
+                    <div class="card-body">
+                        <h5 class="card-title">Password & Segurança</h5>
+                        <button class="btn btn-sm btn-outline-secondary mb-2">Alterar Password</button>
+                        <div>Login Methods:</div>
+                        <ul class="list-group list-group-flush">
+                            <li class="list-group-item">Google <button class="btn btn-sm btn-outline-primary ms-2">Desvincular</button></li>
+                            <li class="list-group-item">Email/Password <button class="btn btn-sm btn-outline-primary ms-2">Desvincular</button></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card mb-4">
+                    <div class="card-body">
+                        <h5 class="card-title">Estatísticas da Coleção</h5>
+                        <ul class="list-group list-group-flush">
+                            <li class="list-group-item">Sets Owned: <span id="ownedCount">...</span></li>
+                            <li class="list-group-item">Sets Wanted: <span id="wantedCount">...</span></li>
+                            <li class="list-group-item">Total Peças: <span id="piecesCount">...</span></li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="card mb-4">
+                    <div class="card-body">
+                        <h5 class="card-title">Privacidade & Partilha</h5>
+                        <div id="shareLinksSection">
+                            <!-- Share links UI will go here -->
+                        </div>
+                        <div class="mt-2">
+                            <label><input type="checkbox"> Opt-out de leaderboards públicos</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="card mb-4">
+                    <div class="card-body">
+                        <h5 class="card-title">Ações da Conta</h5>
+                            <button class="btn btn-sm btn-outline-success mb-2" id="exportBtn">Exportar Coleção (JSON)</button>
+                            <form id="importForm" enctype="multipart/form-data" style="display:inline-block;width:100%">
+                                <input type="file" name="file" accept="application/json" class="form-control mb-2" required>
+                                <button type="submit" class="btn btn-sm btn-outline-success mb-2 w-100">Importar Coleção</button>
+                            </form>
+                            <button class="btn btn-sm btn-outline-primary mb-2" id="shareBtn">Gerar Link de Partilha</button>
+                            <div id="shareLinks" class="mb-2"></div>
+                            <button class="btn btn-sm btn-outline-danger mb-2" id="deleteBtn">Eliminar Conta</button>
+                    <script>
+                    // Export collection
+                    document.getElementById('exportBtn').onclick = function() {
+                        fetch('/account/export').then(r => r.json()).then(data => {
+                            const blob = new Blob([JSON.stringify(data.sets, null, 2)], {type: 'application/json'});
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = 'lego_collection.json';
+                            document.body.appendChild(a);
+                            a.click();
+                            document.body.removeChild(a);
+                            URL.revokeObjectURL(url);
+                        });
+                    };
+
+                    // Import collection
+                    document.getElementById('importForm').onsubmit = function(e) {
+                        e.preventDefault();
+                        const formData = new FormData(this);
+                        fetch('/account/import', { method: 'POST', body: formData }).then(r => r.json()).then(data => {
+                            if (data.success) alert('Coleção importada com sucesso!');
+                            else alert('Erro ao importar coleção');
+                        });
+                    };
+
+                    // Share link generation
+                    document.getElementById('shareBtn').onclick = function() {
+                        fetch('/account/share/create', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ type: 'BOTH' })
+                        }).then(r => r.json()).then(data => {
+                            if (data.success) {
+                                const link = location.origin + '/share/' + data.token;
+                                document.getElementById('shareLinks').innerHTML = '<div class="alert alert-info">Link: <a href="' + link + '" target="_blank">' + link + '</a></div>';
+                            } else {
+                                alert('Erro ao gerar link de partilha');
+                            }
+                        });
+                    };
+                    </script>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

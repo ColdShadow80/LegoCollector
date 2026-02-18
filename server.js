@@ -184,6 +184,76 @@ function ensureAdmin(req, res, next) {
 }
 
 // --- ROTAS PRINCIPAIS ---
+// --- SHARE LINK ROUTES ---
+const SHARE_TOKEN_LENGTH = 32;
+// Create a share link (POST)
+app.post('/account/share/create', (req, res) => {
+    if (!req.user) return res.status(401).json({ error: 'unauthenticated' });
+    const { type, expires_at } = req.body;
+    const token = crypto.randomBytes(SHARE_TOKEN_LENGTH).toString('hex');
+    db.run("INSERT INTO user_share_links (user_id, token, type, expires_at) VALUES (?, ?, ?, ?)", [req.user.id, token, type || 'BOTH', expires_at || null], function(err) {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ success: true, token });
+    });
+});
+
+// Revoke a share link (POST)
+app.post('/account/share/revoke', (req, res) => {
+    if (!req.user) return res.status(401).json({ error: 'unauthenticated' });
+    const { token } = req.body;
+    db.run("UPDATE user_share_links SET is_revoked = 1 WHERE user_id = ? AND token = ?", [req.user.id, token], function(err) {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ success: true });
+    });
+});
+
+// Access a public share link (GET)
+app.get('/share/:token', (req, res) => {
+    const token = req.params.token;
+    db.get("SELECT * FROM user_share_links WHERE token = ? AND is_revoked = 0 AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)", [token], (err, link) => {
+        if (err || !link) return res.status(404).send('Link inválido ou expirado');
+        db.get("SELECT * FROM users WHERE id = ?", [link.user_id], (e, user) => {
+            if (e || !user) return res.status(404).send('Utilizador não encontrado');
+            // Render read-only collection view
+            db.all("SELECT s.*, us.status, us.quantity FROM sets s JOIN user_sets us ON s.set_num = us.set_num WHERE us.user_id = ?", [user.id], (err2, sets) => {
+                if (err2) sets = [];
+                res.render('collection_readonly', { user, sets, type: link.type });
+            });
+        });
+    });
+});
+
+// --- IMPORT/EXPORT ROUTES ---
+// Export collection (GET)
+app.get('/account/export', (req, res) => {
+    if (!req.user) return res.status(401).send('Não autenticado');
+    db.all("SELECT s.*, us.status, us.quantity FROM sets s JOIN user_sets us ON s.set_num = us.set_num WHERE us.user_id = ?", [req.user.id], (err, sets) => {
+        if (err) return res.status(500).send('Erro ao exportar');
+        res.json({ sets });
+    });
+});
+
+// Import collection (POST)
+app.post('/account/import', upload.single('file'), (req, res) => {
+    if (!req.user) return res.status(401).send('Não autenticado');
+    const file = req.file;
+    if (!file) return res.status(400).send('Ficheiro não enviado');
+    const fs = require('fs');
+    fs.readFile(file.path, 'utf8', (err, data) => {
+        if (err) return res.status(500).send('Erro ao ler ficheiro');
+        let sets;
+        try { sets = JSON.parse(data); } catch (e) { return res.status(400).send('Formato inválido'); }
+        // Insert sets for user
+        const insert = db.prepare("INSERT OR IGNORE INTO user_sets (user_id, set_num, status, quantity) VALUES (?, ?, ?, ?)");
+        sets.forEach(s => {
+            insert.run(req.user.id, s.set_num, s.status || 'OWNED', s.quantity || 1);
+        });
+        insert.finalize(() => {
+            fs.unlink(file.path, () => {});
+            res.json({ success: true });
+        });
+    });
+});
 
 // Cache headers middleware for homepage (5 minute cache)
 const setCacheHeaders = (req, res, next) => {
