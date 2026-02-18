@@ -116,7 +116,7 @@
                             <tr>
                                 <td>
                                     <span id="codeDisplay-<%= barcode.code %>"><code class="bg-light px-2 py-1 rounded"><%= barcode.code %></code></span>
-                                    <input type="text" class="form-control form-control-sm bg-light px-2 py-1 rounded d-none" id="codeEdit-<%= barcode.code %>" value="<%= barcode.code %>" data-old-code="<%= barcode.code %>" onchange="updateBarcode(this, 'code')">
+                                    <input type="text" class="form-control form-control-sm bg-light px-2 py-1 rounded d-none" id="codeEdit-<%= barcode.code %>" value="<%= barcode.code %>" data-old-code="<%= barcode.code %>" readonly>
                                 </td>
                                 <td>
                                     <% if (barcode.theme_name) { %>
@@ -136,7 +136,7 @@
                                 </td>
                                 <td>
                                     <span id="setNumDisplay-<%= barcode.code %>"><code><%= barcode.set_num || '' %></code></span>
-                                    <input type="text" class="form-control form-control-sm d-none" id="setNumEdit-<%= barcode.code %>" value="<%= barcode.set_num || '' %>" data-old-code="<%= barcode.code %>" onchange="updateBarcode(this, 'set_num')">
+                                    <input type="text" class="form-control form-control-sm d-none" id="setNumEdit-<%= barcode.code %>" value="<%= barcode.set_num || '' %>" data-old-code="<%= barcode.code %>" readonly>
                                 </td>
                                 <td>
                                     <% if (barcode.year) { %>
@@ -153,8 +153,11 @@
                                     <% } %>
                                 </td>
                                 <td>
-                                    <button class="btn btn-sm btn-outline-secondary me-1" onclick="enableEdit('<%= barcode.code %>')">
+                                    <button class="btn btn-sm btn-outline-secondary me-1" id="editBtn-<%= barcode.code %>" onclick="enableEdit('<%= barcode.code %>')">
                                         <i class="bi bi-pencil"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-success me-1 d-none" id="saveBtn-<%= barcode.code %>" onclick="saveEdit('<%= barcode.code %>')">
+                                        <i class="bi bi-check"></i>
                                     </button>
                                     <button class="btn btn-sm btn-outline-danger" onclick="deleteBarcode('<%= barcode.code %>')">
                                         <i class="bi bi-trash"></i>
@@ -203,9 +206,51 @@
                 function enableEdit(code) {
                     document.getElementById('codeDisplay-' + code).classList.add('d-none');
                     document.getElementById('codeEdit-' + code).classList.remove('d-none');
+                    document.getElementById('codeEdit-' + code).removeAttribute('readonly');
                     document.getElementById('setNumDisplay-' + code).classList.add('d-none');
                     document.getElementById('setNumEdit-' + code).classList.remove('d-none');
+                    document.getElementById('setNumEdit-' + code).removeAttribute('readonly');
+                    document.getElementById('editBtn-' + code).classList.add('d-none');
+                    document.getElementById('saveBtn-' + code).classList.remove('d-none');
                     document.getElementById('codeEdit-' + code).focus();
+                }
+
+                function saveEdit(code) {
+                    const codeInput = document.getElementById('codeEdit-' + code);
+                    const setNumInput = document.getElementById('setNumEdit-' + code);
+                    const old_code = codeInput.getAttribute('data-old-code');
+                    const new_code = codeInput.value.trim();
+                    const set_num = setNumInput.value.trim();
+                    let body = { old_code };
+                    if (new_code !== old_code) body.new_code = new_code;
+                    body.set_num = set_num;
+                    fetch('/admin/barcodes/update', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(body)
+                    })
+                    .then(res => res.json())
+                    .then(data => {
+                        if (!data.success) {
+                            alert('Erro ao atualizar: ' + (data.error || ''));
+                        } else {
+                            // Update display
+                            document.getElementById('codeDisplay-' + code).innerHTML = `<code class="bg-light px-2 py-1 rounded">${new_code}</code>`;
+                            document.getElementById('setNumDisplay-' + code).innerHTML = `<code>${set_num}</code>`;
+                            codeInput.setAttribute('data-old-code', new_code);
+                            codeInput.value = new_code;
+                            setNumInput.value = set_num;
+                            codeInput.setAttribute('readonly', true);
+                            setNumInput.setAttribute('readonly', true);
+                            document.getElementById('codeDisplay-' + code).classList.remove('d-none');
+                            document.getElementById('codeEdit-' + code).classList.add('d-none');
+                            document.getElementById('setNumDisplay-' + code).classList.remove('d-none');
+                            document.getElementById('setNumEdit-' + code).classList.add('d-none');
+                            document.getElementById('editBtn-' + code).classList.remove('d-none');
+                            document.getElementById('saveBtn-' + code).classList.add('d-none');
+                        }
+                    })
+                    .catch(err => alert('Erro: ' + err));
                 }
         function applyFilters() {
             const theme = document.querySelector('[name="theme"]').value;
