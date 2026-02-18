@@ -46,8 +46,9 @@
                 <% themes.forEach(t => { %>
                 <% 
                     var rowStyle = '';
-                    if (t.total_sets == 0) rowStyle = 'background:#fff3cd';
-                    else if (t.total_pieces == 0) rowStyle = 'background:#f8d7da';
+                    // Robust highlight: treat 0, null, undefined, or empty as missing
+                    if (!t.total_sets || t.total_sets === 0) rowStyle = 'background:#fff3cd';
+                    else if (!t.total_pieces || t.total_pieces === 0) rowStyle = 'background:#f8d7da';
                     var updateToggleVal = (t.update_status === 'all' ? 0 : 1);
                     var safeName = (t.name||'').replace(/'/g, "\\'");
                     var checked = t.is_hidden ? 'checked' : '';
