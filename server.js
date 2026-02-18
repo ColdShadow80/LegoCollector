@@ -1152,7 +1152,11 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
 app.get('/logout', (req, res, next) => {
     req.logout((err) => {
         if (err) return next(err);
-        res.redirect('/');
+        req.session.destroy((err) => {
+            if (err) return next(err);
+            res.clearCookie('connect.sid'); // default session cookie name
+            res.redirect('/');
+        });
     });
 });
 
