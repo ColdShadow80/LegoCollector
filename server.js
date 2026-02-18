@@ -642,9 +642,22 @@ app.get('/admin/sets', ensureAdmin, (req, res) => {
         return;
     }
 
-    db.all("SELECT * FROM sets LIMIT ? OFFSET ?", [limit, offset], (err, rows) => {
+    // Add theme name and sorting
+    const sortMap = {
+        set_num: 's.set_num',
+        name: 's.name',
+        year: 's.year',
+        num_parts: 's.num_parts',
+        price_eur: 's.price_eur',
+        theme_name: 't.name'
+    };
+    let sort = req.query.sort || 'set_num';
+    let sortDir = req.query.dir === 'desc' ? 'DESC' : 'ASC';
+    if (!sortMap[sort]) sort = 'set_num';
+    const orderBy = `${sortMap[sort]} ${sortDir}`;
+    db.all(`SELECT s.*, t.name as theme_name FROM sets s LEFT JOIN themes t ON s.theme_id = t.id ORDER BY ${orderBy} LIMIT ? OFFSET ?`, [limit, offset], (err, rows) => {
         db.get("SELECT COUNT(*) as count FROM sets", (e, c) => {
-            res.render('admin/sets', { sets: rows, pagination: { page, totalPages: Math.ceil(c.count/limit) }});
+            res.render('admin/sets', { sets: rows, pagination: { page, totalPages: Math.ceil(c.count/limit) }, sort, sortDir });
         });
     });
 });

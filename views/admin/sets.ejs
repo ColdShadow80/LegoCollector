@@ -32,12 +32,13 @@
         <table class="table table-striped bg-white shadow-sm rounded align-middle">
             <thead>
                 <tr>
-                    <th>Set</th>
+                    <th><a href="?sort=set_num&dir=<%= sort === 'set_num' && sortDir === 'ASC' ? 'desc' : 'asc' %>" class="text-decoration-none">Set<% if(sort==='set_num'){ %> <i class="bi bi-caret-<%= sortDir==='ASC'?'up':'down' %>-fill"></i><% } %></a></th>
                     <th style="width:56px;text-align:center;">Imagem</th>
-                    <th>Nome</th>
-                    <th>Ano</th>
-                    <th>Peças</th>
-                    <th>Preço</th>
+                    <th><a href="?sort=name&dir=<%= sort === 'name' && sortDir === 'ASC' ? 'desc' : 'asc' %>" class="text-decoration-none">Nome<% if(sort==='name'){ %> <i class="bi bi-caret-<%= sortDir==='ASC'?'up':'down' %>-fill"></i><% } %></a></th>
+                    <th><a href="?sort=theme_name&dir=<%= sort === 'theme_name' && sortDir === 'ASC' ? 'desc' : 'asc' %>" class="text-decoration-none">Tema<% if(sort==='theme_name'){ %> <i class="bi bi-caret-<%= sortDir==='ASC'?'up':'down' %>-fill"></i><% } %></a></th>
+                    <th><a href="?sort=year&dir=<%= sort === 'year' && sortDir === 'ASC' ? 'desc' : 'asc' %>" class="text-decoration-none">Ano<% if(sort==='year'){ %> <i class="bi bi-caret-<%= sortDir==='ASC'?'up':'down' %>-fill"></i><% } %></a></th>
+                    <th><a href="?sort=num_parts&dir=<%= sort === 'num_parts' && sortDir === 'ASC' ? 'desc' : 'asc' %>" class="text-decoration-none">Peças<% if(sort==='num_parts'){ %> <i class="bi bi-caret-<%= sortDir==='ASC'?'up':'down' %>-fill"></i><% } %></a></th>
+                    <th><a href="?sort=price_eur&dir=<%= sort === 'price_eur' && sortDir === 'ASC' ? 'desc' : 'asc' %>" class="text-decoration-none">Preço<% if(sort==='price_eur'){ %> <i class="bi bi-caret-<%= sortDir==='ASC'?'up':'down' %>-fill"></i><% } %></a></th>
                     <th>Esconder?</th>
                     <th>Ignorar Peças?</th>
                     <th>Ações</th>
@@ -45,7 +46,7 @@
             </thead>
             <tbody id="setsBody">
                 <% sets.forEach(set => { %>
-                <tr data-term="<%= (set.set_num + ' ' + (set.name||'')) .toLowerCase() %>">
+                <tr data-term="<%= (set.set_num + ' ' + (set.name||'') + ' ' + (set.theme_name||'')) .toLowerCase() %>">
                     <td><%= set.set_num %></td>
                     <td style="width:56px;text-align:center;vertical-align:middle;">
                         <div style="width:48px;height:48px;display:flex;align-items:center;justify-content:center;background:#f8f9fa;border-radius:6px;overflow:hidden;margin:auto;">
@@ -57,6 +58,7 @@
                         </div>
                     </td>
                     <td style="vertical-align:middle;"><%= set.name %></td>
+                    <td style="vertical-align:middle;"><%= set.theme_name || '' %></td>
                     <td><%= set.year %></td>
                     <td><%= set.num_parts %></td>
                     <td><%= set.price_eur ? ('€' + set.price_eur) : '' %></td>

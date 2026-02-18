@@ -45,10 +45,8 @@
             <tbody id="themesBody">
                 <% themes.forEach(t => { %>
                 <% 
-                    var rowStyle = '';
-                    // Robust highlight: treat 0, null, undefined, or empty as missing
-                    if (!t.total_sets || t.total_sets === 0) rowStyle = 'background:#fff3cd';
-                    else if (!t.total_pieces || t.total_pieces === 0) rowStyle = 'background:#f8d7da';
+                    // Use Bootstrap table-warning for either zero sets or zero pieces
+                    var rowClass = (!t.total_sets || t.total_sets === 0 || !t.total_pieces || t.total_pieces === 0) ? 'table-warning' : '';
                     var updateToggleVal = (t.update_status === 'all' ? 0 : 1);
                     var safeName = (t.name||'').replace(/'/g, "\\'");
                     var checked = t.is_hidden ? 'checked' : '';
@@ -60,7 +58,7 @@
                         return str.replace(/'/g, "\\'");
                     }
                 %>
-                <tr data-name="<%= t.name.toLowerCase() %>" style="<%= rowStyle %>">
+                <tr data-name="<%= t.name.toLowerCase() %>" class="<%= rowClass %>">
                     <td><%= t.id %></td>
                     <td><%= t.name %></td>
                     <td><%= t.total_sets %></td>
