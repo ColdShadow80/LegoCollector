@@ -85,6 +85,10 @@
                             <%= filters.unknown === '1' ? 'Mostrar todos os sets' : 'Mostrar apenas sets desconhecidos' %>
                         </label>
                     </div>
+                        <div class="btn-group w-100" role="group" aria-label="Filtro desconhecidos">
+                            <button type="button" class="btn btn-sm <%= filters.unknown === '1' ? 'btn-primary active' : 'btn-outline-secondary' %>" onclick="setUnknownFilter(1)">Mostrar todos os sets</button>
+                            <button type="button" class="btn btn-sm <%= filters.unknown !== '1' ? 'btn-primary active' : 'btn-outline-secondary' %>" onclick="setUnknownFilter(0)">Apenas desconhecidos</button>
+                        </div>
                 </div>
             </div>
             <div class="mt-3">
@@ -297,6 +301,23 @@
             const url = `/admin/barcodes?${params.join('&')}`;
             window.location.href = url;
         }
+            function setUnknownFilter(val) {
+                const theme = document.querySelector('[name="theme"]').value;
+                const set = document.getElementById('setFilter').value;
+                const barcode = document.getElementById('barcodeFilter').value;
+                const sort = document.querySelector('[name="sort"]').value;
+                const unknown = val === 1 ? '1' : '';
+                const params = [
+                    `page=1`,
+                    `theme=${encodeURIComponent(theme)}`,
+                    `set=${encodeURIComponent(set)}`,
+                    `barcode=${encodeURIComponent(barcode)}`,
+                    `sort=${encodeURIComponent(sort)}`
+                ];
+                if (unknown) params.push('unknown=1');
+                const url = `/admin/barcodes?${params.join('&')}`;
+                window.location.href = url;
+            }
 
         function filterBySet() {
             applyFilters();
