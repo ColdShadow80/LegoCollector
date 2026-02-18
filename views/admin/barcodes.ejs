@@ -79,15 +79,10 @@
                     </select>
                 </div>
                 <div class="col-md-3 d-flex align-items-end">
-                    <div class="form-check form-switch">
-                        <input class="form-check-input" type="checkbox" id="unknownToggle" <%= filters.unknown === '1' ? 'checked' : '' %> onchange="toggleUnknown()">
-                        <label class="form-check-label small" for="unknownToggle" id="unknownLabel">
-                            <%= filters.unknown === '1' ? 'Mostrar todos os sets' : 'Mostrar apenas sets desconhecidos' %>
-                        </label>
-                    </div>
+
                         <div class="btn-group w-100" role="group" aria-label="Filtro desconhecidos">
-                            <button type="button" class="btn btn-sm <%= filters.unknown === '1' ? 'btn-primary active' : 'btn-outline-secondary' %>" onclick="setUnknownFilter(1)">Mostrar todos os sets</button>
-                            <button type="button" class="btn btn-sm <%= filters.unknown !== '1' ? 'btn-primary active' : 'btn-outline-secondary' %>" onclick="setUnknownFilter(0)">Apenas desconhecidos</button>
+                            <button type="button" class="btn btn-sm <%= filters.unknown === '1' ? 'btn-primary active' : 'btn-outline-secondary' %>" onclick="setUnknownFilter(0)">Mostrar todos os sets</button>
+                            <button type="button" class="btn btn-sm <%= filters.unknown !== '1' ? 'btn-primary active' : 'btn-outline-secondary' %>" onclick="setUnknownFilter(1)">Apenas desconhecidos</button>
                         </div>
                 </div>
             </div>
