@@ -324,7 +324,10 @@ app.get('/', setCacheHeaders, (req, res) => {
     const filterThemes = req.query.themes || '';
     const filterYear = req.query.year || '';
     const filterSort = req.query.sort || 'newest';
-    const filterStatus = req.query.status || '';
+    // Default to 'owned' for logged-in users if not specified
+    let filterStatus = req.query.status;
+    if (req.user && typeof filterStatus === 'undefined') filterStatus = 'owned';
+    else filterStatus = filterStatus || '';
     const page = parseInt(req.query.page) || 1;
     
     // Log incoming filters for debugging

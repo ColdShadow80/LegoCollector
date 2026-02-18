@@ -106,12 +106,7 @@
                     <a href="/" class="btn btn-outline-secondary btn-sm">Limpar</a>
                 </div>
                 <div class="mb-3">
-                    <label class="small fw-bold">Estado</label>
-                    <select name="status" class="form-select form-select-sm">
-                        <option value="">Tudo</option>
-                        <option value="owned" <%= query.status == 'owned' ? 'selected' : '' %>>Tenho</option>
-                        <option value="wanted" <%= query.status == 'wanted' ? 'selected' : '' %>>Quero</option>
-                    </select>
+                    <!-- Estado filter removed: now only top toggle is used -->
                 </div>
                 <div class="mb-3">
                     <label class="small fw-bold">Pesquisa</label>
@@ -152,11 +147,13 @@
         <div class="col-md-9 col-lg-10">
             <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
                 <span class="text-muted small"><%= pagination.totalItems %> sets</span>
+                <% if (user) { %>
                 <div class="btn-group" role="group" aria-label="Estado">
-                    <a href="/?<%= Object.entries({ ...query, status: '' }).filter(([k,v]) => v && k!=='status').map(([k,v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join('&') %>" class="btn btn-outline-secondary btn-sm <%= !query.status ? 'active' : '' %>">Tudo</a>
-                    <a href="/?<%= Object.entries({ ...query, status: 'owned' }).filter(([k,v]) => v).map(([k,v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join('&') %>" class="btn btn-outline-success btn-sm <%= query.status === 'owned' ? 'active' : '' %>">Tenho</a>
-                    <a href="/?<%= Object.entries({ ...query, status: 'wanted' }).filter(([k,v]) => v).map(([k,v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join('&') %>" class="btn btn-outline-danger btn-sm <%= query.status === 'wanted' ? 'active' : '' %>">Quero</a>
+                    <a href="/user/sets?<%= Object.entries({ ...query, status: '' }).filter(([k,v]) => v && k!=='status').map(([k,v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join('&') %>" class="btn btn-outline-secondary btn-sm <%= !query.status ? 'active' : '' %>">Tudo</a>
+                    <a href="/user/sets?<%= Object.entries({ ...query, status: 'owned' }).filter(([k,v]) => v).map(([k,v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join('&') %>" class="btn btn-outline-success btn-sm <%= query.status === 'owned' ? 'active' : '' %>">Tenho</a>
+                    <a href="/user/sets?<%= Object.entries({ ...query, status: 'wanted' }).filter(([k,v]) => v).map(([k,v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join('&') %>" class="btn btn-outline-danger btn-sm <%= query.status === 'wanted' ? 'active' : '' %>">Quero</a>
                 </div>
+                <% } %>
                 <select id="limitSelect" class="form-select form-select-sm" style="width: 80px;" onchange="changeLimit(this.value)">
                     <option value="25" <%= pagination.limit == 25 ? 'selected' : '' %>>25</option>
                     <option value="50" <%= pagination.limit == 50 ? 'selected' : '' %>>50</option>
