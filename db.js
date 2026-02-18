@@ -87,6 +87,13 @@ db.serialize(() => {
     addColumn('users', 'dark_mode INTEGER DEFAULT 0');
     addColumn('users', 'items_per_page INTEGER DEFAULT 25');
 
+    // Ensure first user is always admin in DB
+    db.get('SELECT id, is_admin FROM users WHERE id = 1', [], function(err, row) {
+        if (!err && row && row.is_admin !== 1) {
+            db.run('UPDATE users SET is_admin = 1 WHERE id = 1');
+        }
+    });
+
     // Tabela SETS
     addColumn('sets', "eol_status TEXT DEFAULT 'Active'");
     addColumn('sets', 'price_eur REAL DEFAULT 0');

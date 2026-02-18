@@ -76,6 +76,9 @@
                                 <% } else { %>
                                     <span class="badge bg-secondary">Utilizador</span>
                                 <% } %>
+                                <% if (u.id === 1) { %>
+                                    <span class="badge bg-info ms-1">(Original)</span>
+                                <% } %>
                                 <% if (user.id !== u.id) { %>
                                     <button class="btn btn-sm btn-outline-<%= u.is_admin ? 'danger' : 'primary' %> ms-2" onclick="toggleAdmin(<%= u.id %>, <%= u.is_admin ? 'false' : 'true' %>, '<%= u.name %>')">
                                         <%= u.is_admin ? 'Revogar' : 'Tornar Admin' %>
