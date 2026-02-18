@@ -160,7 +160,14 @@
                 <span class="text-muted small"><%= pagination.totalItems %> sets</span>
                 <% if (user) { %>
                 <div class="btn-group" role="group" aria-label="Estado">
-                    <a href="/?<%= Object.entries({ ...query, status: '' }).filter(([k,v]) => v && k!=='status').map(([k,v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join('&') %>" class="btn btn-outline-secondary btn-sm <%= !query.status ? 'active' : '' %>">Tudo</a>
+                    <a href="/?<%= (() => {
+                        const q = { ...query, status: '' };
+                        const params = Object.entries(q)
+                            .filter(([k,v]) => k !== 'status' && v)
+                            .map(([k,v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`);
+                        params.push('status=');
+                        return params.join('&');
+                    })() %>" class="btn btn-outline-secondary btn-sm <%= !query.status ? 'active' : '' %>">Tudo</a>
                     <a href="/?<%= Object.entries({ ...query, status: 'owned' }).filter(([k,v]) => v).map(([k,v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join('&') %>" class="btn btn-outline-success btn-sm <%= query.status === 'owned' ? 'active' : '' %>">Tenho</a>
                     <a href="/?<%= Object.entries({ ...query, status: 'wanted' }).filter(([k,v]) => v).map(([k,v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join('&') %>" class="btn btn-outline-danger btn-sm <%= query.status === 'wanted' ? 'active' : '' %>">Quero</a>
                 </div>
