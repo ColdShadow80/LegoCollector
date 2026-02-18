@@ -103,7 +103,15 @@
             <form action="/" method="GET" id="filterForm">
                 <div class="d-grid gap-2 mb-3">
                     <button type="submit" class="btn btn-primary btn-sm">Aplicar</button>
-                    <a href="/" class="btn btn-outline-secondary btn-sm">Limpar</a>
+                                        <% /* Limpar: clear all filters, preserve user context if on user page */ %>
+                                        <% let clearUrl = '/';
+                                             if (user && query.status) {
+                                                 clearUrl = '/?status=' + encodeURIComponent(query.status);
+                                             } else if (user) {
+                                                 clearUrl = '/?status=';
+                                             }
+                                        %>
+                                        <a href="<%= clearUrl %>" class="btn btn-outline-secondary btn-sm">Limpar</a>
                 </div>
                 <div class="mb-3">
                     <!-- Estado filter removed: now only top toggle is used -->
