@@ -326,8 +326,14 @@ app.get('/', setCacheHeaders, (req, res) => {
     const filterSort = req.query.sort || 'newest';
     // Default to 'owned' for logged-in users if not specified
     let filterStatus = req.query.status;
-    if (req.user && typeof filterStatus === 'undefined') filterStatus = 'owned';
-    else filterStatus = filterStatus || '';
+    if (req.user && typeof filterStatus === 'undefined') {
+        filterStatus = 'owned';
+    } else if (typeof filterStatus === 'string') {
+        // If status is present (even as empty string), use as-is
+        // (so All filter works)
+    } else {
+        filterStatus = '';
+    }
     const page = parseInt(req.query.page) || 1;
     
     // Log incoming filters for debugging
