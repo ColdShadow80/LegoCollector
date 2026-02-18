@@ -237,6 +237,37 @@ app.get('/account/share', (req, res) => {
 });
 
 // Import/Export page (GET)
+// Statistics page (GET)
+app.get('/statistics', (req, res) => {
+    if (!req.user) return res.redirect('/login');
+    const userId = req.user.id;
+    // Aggregate stats
+    db.all("SELECT s.*, us.status, us.quantity FROM sets s JOIN user_sets us ON s.set_num = us.set_num WHERE us.user_id = ?", [userId], (err, sets) => {
+        if (err) return res.status(500).send('Erro ao obter estatísticas');
+        const stats = {
+            total_sets: sets.length,
+            total_parts: sets.reduce((sum, s) => sum + (s.num_parts || 0) * (s.quantity || 1), 0),
+            total_value: sets.reduce((sum, s) => sum + (s.price_eur || 0) * (s.quantity || 1), 0).toFixed(2),
+            wanted_count: sets.filter(s => s.status === 'WANTED').length,
+            wanted_value: sets.filter(s => s.status === 'WANTED').reduce((sum, s) => sum + (s.price_eur || 0), 0).toFixed(2)
+        };
+        // Top 5 themes
+        const themeMap = {};
+        sets.forEach(s => {
+            if (!themeMap[s.theme_name]) themeMap[s.theme_name] = { name: s.theme_name, count: 0 };
+            themeMap[s.theme_name].count += 1;
+        });
+        const themes = Object.values(themeMap).sort((a,b) => b.count-a.count).slice(0,5);
+        // Sets per year
+        const yearMap = {};
+        sets.forEach(s => {
+            if (!yearMap[s.year]) yearMap[s.year] = { year: s.year, count: 0 };
+            yearMap[s.year].count += 1;
+        });
+        const years = Object.values(yearMap).sort((a,b) => a.year-b.year);
+        res.render('statistics', { user: req.user, stats, themes, years });
+    });
+});
 app.get('/import', (req, res) => {
     if (!req.user) return res.redirect('/login');
     res.render('import', { user: req.user });
