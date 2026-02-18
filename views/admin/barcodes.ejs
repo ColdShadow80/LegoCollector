@@ -270,11 +270,22 @@
         }
 
         function toggleUnknown() {
-            const btn = document.getElementById('unknownToggle');
-            btn.classList.toggle('btn-primary');
-            btn.classList.toggle('btn-outline-secondary');
-            btn.innerHTML = btn.classList.contains('btn-primary') ? 'Mostrar todos os sets' : 'Mostrar apenas sets desconhecidos';
-            applyFilters();
+            const theme = document.querySelector('[name="theme"]').value;
+            const set = document.getElementById('setFilter').value;
+            const barcode = document.getElementById('barcodeFilter').value;
+            const sort = document.querySelector('[name="sort"]').value;
+            // Flip unknown filter
+            const unknown = '<%= filters.unknown === "1" ? "" : "1" %>';
+            const params = [
+                `page=1`,
+                `theme=${encodeURIComponent(theme)}`,
+                `set=${encodeURIComponent(set)}`,
+                `barcode=${encodeURIComponent(barcode)}`,
+                `sort=${encodeURIComponent(sort)}`
+            ];
+            if (unknown) params.push('unknown=1');
+            const url = `/admin/barcodes?${params.join('&')}`;
+            window.location.href = url;
         }
 
         function filterBySet() {
