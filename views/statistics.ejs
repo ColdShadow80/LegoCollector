@@ -16,29 +16,41 @@
 </nav>
 <div class="container py-4">
     <h2 class="mb-4 fw-bold">📊 Estatísticas da Coleção</h2>
-    <div class="row row-cols-2 row-cols-md-4 g-3 mb-5">
-        <div class="col">
-            <div class="card shadow-sm text-center p-3 h-100 border-primary border-top-0 border-end-0 border-bottom-0 border-4">
-                <div class="fs-1 fw-bold text-primary"><%= stats.total_sets %></div>
-                <div class="text-muted small">Total de Sets</div>
+    <div class="row g-4 mb-4">
+        <div class="col-md-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-primary text-white fw-bold">Geral</div>
+                <div class="card-body">
+                    <ul class="list-group list-group-flush">
+                        <li class="list-group-item">Sets: <span class="fw-bold text-primary"><%= stats.total_sets %></span></li>
+                        <li class="list-group-item">Peças: <span class="fw-bold text-warning"><%= stats.total_parts %></span></li>
+                        <li class="list-group-item">Valor total: <span class="fw-bold text-success"><%= stats.total_value %>€</span></li>
+                    </ul>
+                </div>
             </div>
         </div>
-        <div class="col">
-            <div class="card shadow-sm text-center p-3 h-100 border-warning border-top-0 border-end-0 border-bottom-0 border-4">
-                <div class="fs-1 fw-bold text-warning"><%= stats.total_parts %></div>
-                <div class="text-muted small">Total de Peças</div>
+        <div class="col-md-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-success text-white fw-bold">Sets Owned</div>
+                <div class="card-body">
+                    <ul class="list-group list-group-flush">
+                        <li class="list-group-item">Sets: <span class="fw-bold text-success"><%= stats.owned_count %></span></li>
+                        <li class="list-group-item">Peças: <span class="fw-bold text-success"><%= stats.owned_parts %></span></li>
+                        <li class="list-group-item">Valor: <span class="fw-bold text-success"><%= stats.owned_value %>€</span></li>
+                    </ul>
+                </div>
             </div>
         </div>
-        <div class="col">
-            <div class="card shadow-sm text-center p-3 h-100 border-success border-top-0 border-end-0 border-bottom-0 border-4">
-                <div class="fs-1 fw-bold text-success"><%= stats.total_value %>€</div>
-                <div class="text-muted small">Valor de Mercado</div>
-            </div>
-        </div>
-        <div class="col">
-            <div class="card shadow-sm text-center p-3 h-100 border-danger border-top-0 border-end-0 border-bottom-0 border-4">
-                <div class="fs-1 fw-bold text-danger"><%= stats.wanted_count %></div>
-                <div class="text-muted small">Na Wishlist (<%= stats.wanted_value %>€)</div>
+        <div class="col-md-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-danger text-white fw-bold">Sets Wanted</div>
+                <div class="card-body">
+                    <ul class="list-group list-group-flush">
+                        <li class="list-group-item">Sets: <span class="fw-bold text-danger"><%= stats.wanted_count %></span></li>
+                        <li class="list-group-item">Peças: <span class="fw-bold text-danger"><%= stats.wanted_parts %></span></li>
+                        <li class="list-group-item">Valor: <span class="fw-bold text-danger"><%= stats.wanted_value %>€</span></li>
+                    </ul>
+                </div>
             </div>
         </div>
     </div>

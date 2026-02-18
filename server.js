@@ -244,13 +244,22 @@ app.get('/statistics', (req, res) => {
     // Aggregate stats
     db.all("SELECT s.*, us.status, us.quantity FROM sets s JOIN user_sets us ON s.set_num = us.set_num WHERE us.user_id = ?", [userId], (err, sets) => {
         if (err) return res.status(500).send('Erro ao obter estatísticas');
+        // General stats
         const stats = {
             total_sets: sets.length,
             total_parts: sets.reduce((sum, s) => sum + (s.num_parts || 0) * (s.quantity || 1), 0),
             total_value: sets.reduce((sum, s) => sum + (s.price_eur || 0) * (s.quantity || 1), 0).toFixed(2),
-            wanted_count: sets.filter(s => s.status === 'WANTED').length,
-            wanted_value: sets.filter(s => s.status === 'WANTED').reduce((sum, s) => sum + (s.price_eur || 0), 0).toFixed(2)
         };
+        // Owned stats
+        const owned = sets.filter(s => s.status === 'OWNED');
+        stats.owned_count = owned.length;
+        stats.owned_parts = owned.reduce((sum, s) => sum + (s.num_parts || 0) * (s.quantity || 1), 0);
+        stats.owned_value = owned.reduce((sum, s) => sum + (s.price_eur || 0) * (s.quantity || 1), 0).toFixed(2);
+        // Wanted stats
+        const wanted = sets.filter(s => s.status === 'WANTED');
+        stats.wanted_count = wanted.length;
+        stats.wanted_parts = wanted.reduce((sum, s) => sum + (s.num_parts || 0) * (s.quantity || 1), 0);
+        stats.wanted_value = wanted.reduce((sum, s) => sum + (s.price_eur || 0) * (s.quantity || 1), 0).toFixed(2);
         // Top 5 themes
         const themeMap = {};
         sets.forEach(s => {
