@@ -655,6 +655,7 @@ app.get('/admin/sets', ensureAdmin, (req, res) => {
     let sortDir = req.query.dir === 'desc' ? 'DESC' : 'ASC';
     if (!sortMap[sort]) sort = 'set_num';
     const orderBy = `${sortMap[sort]} ${sortDir}`;
+    const filterTheme = req.query.theme || '';
     db.all(`
         SELECT t.id, t.name,
                COUNT(s.set_num) as set_count,
@@ -666,9 +667,15 @@ app.get('/admin/sets', ensureAdmin, (req, res) => {
         GROUP BY t.id, t.name
         ORDER BY t.name
     `, [], (err, allThemes) => {
-        db.all(`SELECT s.*, t.name as theme_name FROM sets s LEFT JOIN themes t ON s.theme_id = t.id ORDER BY ${orderBy} LIMIT ? OFFSET ?`, [limit, offset], (err2, rows) => {
-            db.get("SELECT COUNT(*) as count FROM sets", (e, c) => {
-                res.render('admin/sets', { sets: rows, pagination: { page, totalPages: Math.ceil(c.count/limit) }, sort, sortDir, allThemes });
+        let where = '';
+        let params = [];
+        if (filterTheme) {
+            where = 'WHERE s.theme_id = ?';
+            params.push(filterTheme);
+        }
+        db.all(`SELECT s.*, t.name as theme_name FROM sets s LEFT JOIN themes t ON s.theme_id = t.id ${where} ORDER BY ${orderBy} LIMIT ? OFFSET ?`, [...params, limit, offset], (err2, rows) => {
+            db.get(`SELECT COUNT(*) as count FROM sets s ${where}`, params, (e, c) => {
+                res.render('admin/sets', { sets: rows, pagination: { page, totalPages: Math.ceil(c.count/limit) }, sort, sortDir, allThemes, theme_id: filterTheme });
             });
         });
     });
