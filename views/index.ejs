@@ -392,6 +392,7 @@
     (function() {
         const scannerModal = document.getElementById('scannerModal');
         let html5QrcodeScanner = null;
+        let currentScannedCode = '';
 
         if (scannerModal) {
             scannerModal.addEventListener('shown.bs.modal', () => {
@@ -414,11 +415,13 @@
                     const sc = document.getElementById('scannedCode'); if (sc) sc.value = '';
                     const ts = document.getElementById('teachSetNum'); if (ts) ts.value = '';
                     const fb = document.getElementById('teachFeedback'); if (fb) fb.textContent = '';
+                    const sr = document.getElementById('barcodeSearchResult'); if (sr) sr.innerHTML = '';
                 }
             });
         }
 
         function onScanSuccess(decodedText, decodedResult) {
+            currentScannedCode = decodedText;
             // Populate the modal with the decoded text and show actions
             const scanResult = document.getElementById('scanResult');
             const scannedCode = document.getElementById('scannedCode');
@@ -427,11 +430,12 @@
 
             // Wire search button
             const barcodeSearchResult = document.getElementById('barcodeSearchResult');
-            document.getElementById('searchBarcodeBtn')?.addEventListener('click', async () => {
+            const searchBarcodeBtn = document.getElementById('searchBarcodeBtn');
+            if (searchBarcodeBtn) searchBarcodeBtn.onclick = async () => {
                 if (barcodeSearchResult) {
                     barcodeSearchResult.innerHTML = '<span class="text-muted small">Pesquisando...</span>';
                     try {
-                        const res = await fetch(`/api/barcode-lookup/${encodeURIComponent(decodedText)}`);
+                        const res = await fetch(`/api/barcode-lookup/${encodeURIComponent(currentScannedCode)}`);
                         const data = await res.json();
                         if (data.found && data.set) {
                             barcodeSearchResult.innerHTML = `<div class='alert alert-success p-2 d-flex align-items-center gap-2'><img src='${data.set.img_url || 'https://via.placeholder.com/60'}' style='height:40px;width:auto;border-radius:4px;'> <div><b>${data.set.name}</b><br><span class='text-muted small'>ID: ${data.set.set_num}</span><br><a href='/set/${encodeURIComponent(data.set.set_num)}' class='btn btn-sm btn-outline-primary mt-1'>Ver detalhes</a></div></div>`;
@@ -442,11 +446,12 @@
                         barcodeSearchResult.innerHTML = '<span class="text-danger small">Erro ao pesquisar.</span>';
                     }
                 }
-            });
+            };
 
-            document.getElementById('copyCodeBtn')?.addEventListener('click', async () => {
-                try { await navigator.clipboard.writeText(decodedText); } catch(e) { }
-            });
+            const copyCodeBtn = document.getElementById('copyCodeBtn');
+            if (copyCodeBtn) copyCodeBtn.onclick = async () => {
+                try { await navigator.clipboard.writeText(currentScannedCode); } catch(e) { }
+            };
 
             // Teach button only present for authenticated users
             const teachBtn = document.getElementById('teachBtn');
@@ -468,7 +473,7 @@
                                 feedback.textContent = 'Salvando mapeamento...';
                                 let saveRes = await fetch('/api/barcode/teach', {
                                     method: 'POST', headers: {'Content-Type':'application/json'},
-                                    body: JSON.stringify({ code: decodedText, set_num: setNum })
+                                    body: JSON.stringify({ code: currentScannedCode, set_num: setNum })
                                 });
                                 if (saveRes.status === 401) {
                                     feedback.textContent = 'Inicie sessão para ensinar códigos.';
@@ -489,7 +494,7 @@
                                         feedback.textContent = 'Salvando mapeamento...';
                                         let saveRes = await fetch('/api/barcode/teach', {
                                             method: 'POST', headers: {'Content-Type':'application/json'},
-                                            body: JSON.stringify({ code: decodedText, set_num: chosen })
+                                            body: JSON.stringify({ code: currentScannedCode, set_num: chosen })
                                         });
                                         if (saveRes.status === 401) {
                                             feedback.textContent = 'Inicie sessão para ensinar códigos.';

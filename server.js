@@ -1,3 +1,21 @@
+require('dotenv').config();
+const express = require('express');
+const session = require('express-session');
+const SQLiteStore = require('connect-sqlite3')(session);
+const passport = require('passport');
+const LocalStrategy = require('passport-local').Strategy;
+const GoogleStrategy = require('passport-google-oauth20').Strategy;
+const util = require('util');
+const bcrypt = require('bcrypt');
+const crypto = require('crypto');
+const cron = require('node-cron');     // Restaurado
+const { exec } = require('child_process'); // Restaurado
+const nodemailer = require('nodemailer');  // Restaurado
+const multer = require('multer');      // Restaurado
+const db = require('./db');
+const path = require('path');
+const app = express();
+
 // Barcode and Set Search API for Scanner Modal
 app.get('/api/barcode-lookup/:code', (req, res) => {
     const code = req.params.code;
@@ -21,23 +39,6 @@ app.get('/api/set-search', (req, res) => {
         res.json({ results: rows });
     });
 });
-require('dotenv').config();
-const express = require('express');
-const session = require('express-session');
-const SQLiteStore = require('connect-sqlite3')(session);
-const passport = require('passport');
-const LocalStrategy = require('passport-local').Strategy;
-const GoogleStrategy = require('passport-google-oauth20').Strategy;
-const util = require('util');
-const bcrypt = require('bcrypt');
-const crypto = require('crypto');
-const cron = require('node-cron');     // Restaurado
-const { exec } = require('child_process'); // Restaurado
-const nodemailer = require('nodemailer');  // Restaurado
-const multer = require('multer');      // Restaurado
-const db = require('./db');
-const path = require('path');
-const app = express();
 
 const upload = multer({ dest: 'uploads/' });
 
