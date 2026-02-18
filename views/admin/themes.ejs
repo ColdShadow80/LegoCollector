@@ -84,7 +84,7 @@
                     </td>
                     <td>
                         <% var tNameEscaped = (t.name||'').replace(/'/g, "\\'"); %>
-                        <button class="btn btn-sm btn-outline-primary" onclick="openEdit(<%= t.id %>, '<%= tNameEscaped %>')">Editar</button>
+                        <button class="btn btn-sm btn-outline-primary" onclick="openEdit(<%= t.id %>, '<%= tNameEscaped %>', <%= t.is_hidden ? 'true' : 'false' %>)">Editar</button>
                     </td>
                 </tr>
                 <% }) %>
@@ -186,10 +186,10 @@
             }
         });
 
-        function openEdit(id, name) {
+        function openEdit(id, name, is_hidden) {
             document.getElementById('editThemeId').value = id;
             document.getElementById('editThemeName').value = name;
-            document.getElementById('editThemeHidden').checked = false;
+            document.getElementById('editThemeHidden').checked = !!is_hidden;
             new bootstrap.Modal(document.getElementById('editThemeModal')).show();
         }
 
