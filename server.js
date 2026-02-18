@@ -388,13 +388,19 @@ app.get('/', setCacheHeaders, (req, res) => {
         params.push(`%${filterSearch}%`, `%${filterSearch}%`);
     }
     if (filterThemes) {
+        // Support multi-ID (comma-separated) for merged theme checkboxes
+        let themeIds = [];
         if (Array.isArray(filterThemes)) {
-            const placeholders = filterThemes.map(() => '?').join(',');
-            sql += ` AND s.theme_id IN (${placeholders})`;
-            params.push(...filterThemes.map(t => parseInt(t)));
+            filterThemes.forEach(val => {
+                val.split(',').forEach(id => { if (id) themeIds.push(parseInt(id)); });
+            });
         } else {
-            sql += " AND s.theme_id = ?";
-            params.push(parseInt(filterThemes));
+            filterThemes.split(',').forEach(id => { if (id) themeIds.push(parseInt(id)); });
+        }
+        if (themeIds.length > 0) {
+            const placeholders = themeIds.map(() => '?').join(',');
+            sql += ` AND s.theme_id IN (${placeholders})`;
+            params.push(...themeIds);
         }
     }
     if (filterYear) {
@@ -417,20 +423,30 @@ app.get('/', setCacheHeaders, (req, res) => {
     // Executar Queries
     // OPTIMIZED: Use single GROUP BY query instead of subqueries (major performance improvement)
     db.all(`
-        SELECT t.id, t.name,
+        SELECT t.name,
+               GROUP_CONCAT(t.id) as ids,
                COUNT(s.set_num) as count,
                MIN(s.year) as min_year,
                MAX(s.year) as max_year
         FROM themes t
         LEFT JOIN sets s ON s.theme_id = t.id
-        GROUP BY t.id, t.name
+        GROUP BY t.name
         ORDER BY t.name
-    `, [], (err, themes) => {
+    `, [], (err, themesRaw) => {
         if(err) {
             console.error('\u274c Themes query error:');
             console.error('Error:', err);
             return res.status(500).send("Erro Temas");
         }
+        // For filter: show only one entry per theme name, but keep all IDs for filtering
+        const themes = themesRaw.map(t => ({
+            id: t.ids.split(',')[0], // Use first ID for checkbox value
+            ids: t.ids.split(',').map(Number), // All IDs for advanced filtering if needed
+            name: t.name,
+            count: t.count,
+            min_year: t.min_year,
+            max_year: t.max_year
+        }));
 
         // Contagem Total
         let countSql = `SELECT COUNT(*) as total FROM sets s WHERE 1=1`;
