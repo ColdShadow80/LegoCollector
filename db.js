@@ -39,7 +39,8 @@ db.serialize(() => {
         name TEXT,
         email TEXT UNIQUE,
         password TEXT,
-        last_login DATETIME
+        last_login DATETIME,
+        is_admin INTEGER DEFAULT 0
     )`);
 
     db.run(`CREATE TABLE IF NOT EXISTS sets (
@@ -77,6 +78,7 @@ db.serialize(() => {
     // --- 2. MIGRAÇÕES (Adicionar colunas que faltam em tabelas antigas) ---
     
     // Tabela USERS
+    addColumn('users', 'is_admin INTEGER DEFAULT 0');
     addColumn('users', 'google_id TEXT');
     addColumn('users', 'is_verified INTEGER DEFAULT 0');
     addColumn('users', 'verify_token TEXT');

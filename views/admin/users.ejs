@@ -45,6 +45,7 @@
                         <th>Email</th>
                         <th>Tipo Login</th>
                         <th>Ativo?</th>
+                        <th>Admin</th>
                         <th>Último Acesso</th>
                         <th>Ações</th>
                     </tr>
@@ -69,6 +70,18 @@
                                     <span class="badge bg-danger-subtle text-danger border border-danger">Não</span> 
                                 <% } %>
                             </td>
+                            <td>
+                                <% if (u.is_admin) { %>
+                                    <span class="badge bg-primary">Admin</span>
+                                <% } else { %>
+                                    <span class="badge bg-secondary">Utilizador</span>
+                                <% } %>
+                                <% if (user.id !== u.id) { %>
+                                    <button class="btn btn-sm btn-outline-<%= u.is_admin ? 'danger' : 'primary' %> ms-2" onclick="toggleAdmin(<%= u.id %>, <%= u.is_admin ? 'false' : 'true' %>, '<%= u.name %>')">
+                                        <%= u.is_admin ? 'Revogar' : 'Tornar Admin' %>
+                                    </button>
+                                <% } %>
+                            </td>
                             <td class="small text-muted">
                                 <%= u.last_login ? new Date(u.last_login).toLocaleString('pt-PT') : 'Nunca' %>
                             </td>
@@ -86,6 +99,28 @@
                                     <span class="text-muted small">Gerido pela Google</span>
                                 <% } %>
                             </td>
+                            <script>
+                                async function toggleAdmin(id, makeAdmin, name) {
+                                    const action = makeAdmin === true || makeAdmin === 'true';
+                                    const msg = action ? `Tem a certeza que deseja tornar ${name} um admin?` : `Tem a certeza que deseja revogar o status de admin de ${name}?`;
+                                    if (!confirm(msg)) return;
+                                    try {
+                                        const res = await fetch('/admin/users/admin', {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({ user_id: id, make_admin: action })
+                                        });
+                                        const data = await res.json();
+                                        if (data.error) {
+                                            alert('❌ ' + data.error);
+                                        } else {
+                                            location.reload();
+                                        }
+                                    } catch (e) {
+                                        alert('Erro ao comunicar com o servidor.');
+                                    }
+                                }
+                            </script>
                         </tr>
                     <% }) %>
                 </tbody>

@@ -636,8 +636,35 @@ app.get('/admin/users', ensureAdmin, (req, res) => {
     if(sort === 'login') orderBy = 'last_login DESC';
 
     db.all(`SELECT * FROM users ORDER BY ${orderBy}`, [], (err, rows) => {
-        res.render('admin/users', { users: rows, sort: sort });
+        db.all('SELECT COUNT(*) as count FROM users WHERE is_admin = 1', [], (e, adminCountRows) => {
+            const adminCount = adminCountRows && adminCountRows[0] ? adminCountRows[0].count : 0;
+            res.render('admin/users', { users: rows, sort: sort, adminCount });
+        });
     });
+// Set or revoke admin status
+app.post('/admin/users/admin', ensureAdmin, express.json(), (req, res) => {
+    const { user_id, make_admin } = req.body;
+    db.get('SELECT * FROM users WHERE id = ?', [user_id], (err, user) => {
+        if (err || !user) return res.status(404).json({ error: 'User not found' });
+        if (make_admin) {
+            db.run('UPDATE users SET is_admin = 1 WHERE id = ?', [user_id], function(err2) {
+                if (err2) return res.status(500).json({ error: 'Failed to set admin' });
+                return res.json({ success: true, is_admin: 1 });
+            });
+        } else {
+            db.all('SELECT COUNT(*) as count FROM users WHERE is_admin = 1', [], (e, rows) => {
+                const adminCount = rows && rows[0] ? rows[0].count : 0;
+                if (adminCount <= 1 && user.is_admin) {
+                    return res.status(400).json({ error: 'Não é possível remover o último admin.' });
+                }
+                db.run('UPDATE users SET is_admin = 0 WHERE id = ?', [user_id], function(err2) {
+                    if (err2) return res.status(500).json({ error: 'Failed to revoke admin' });
+                    return res.json({ success: true, is_admin: 0 });
+                });
+            });
+        }
+    });
+});
 });
 
 app.post('/admin/users/reset', ensureAdmin, express.json(), (req, res) => {
