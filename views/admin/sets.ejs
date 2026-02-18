@@ -31,7 +31,12 @@
                 <select name="theme" class="form-select form-select-sm" onchange="this.form.submit()">
                     <option value="">Todos os Temas</option>
                     <% if (typeof allThemes !== 'undefined') { allThemes.forEach(theme => { %>
-                        <option value="<%= theme.id %>" <%= (typeof theme_id !== 'undefined' && theme_id == theme.id) ? 'selected' : '' %>><%= theme.name %></option>
+                        <option value="<%= theme.id %>" <%= (typeof theme_id !== 'undefined' && theme_id == theme.id) ? 'selected' : '' %>>
+                            <%= theme.name %>
+                            <% if (theme.set_count > 0) { %>
+                                ( <%= theme.set_count %> sets, <%= theme.total_pieces || 0 %> peças, <%= theme.min_year %><% if(theme.max_year && theme.max_year !== theme.min_year){ %> - <%= theme.max_year %><% } %> )
+                            <% } %>
+                        </option>
                     <% }) } %>
                 </select>
                 <button type="submit" class="btn btn-sm btn-outline-secondary">Filtrar</button>
