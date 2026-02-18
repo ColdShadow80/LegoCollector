@@ -954,7 +954,7 @@ app.get('/admin/barcodes', ensureAdmin, (req, res) => {
                     barcodes: barcodes,
                     themes: themes,
                     pagination: { page, totalPages, limit, totalBarcodes },
-                    filters: { theme: filterTheme, set: filterSet, barcode: filterBarcode, sort: sortBy }
+                    filters: { theme: filterTheme, set: filterSet, barcode: filterBarcode, sort: sortBy, unknown: req.query.unknown === '1' ? '1' : '' }
                 });
             });
         });
