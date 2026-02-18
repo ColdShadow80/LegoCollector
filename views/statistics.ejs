@@ -62,10 +62,8 @@
     </div>
 </div>
 <script>
-    <script>
-    var themesData = <%- JSON.stringify(themes) %>;
-    var yearsData = <%- JSON.stringify(years) %>;
-    </script>
+    window.themesData = <%- JSON.stringify(themes) %>;
+    window.yearsData = <%- JSON.stringify(years) %>;
     new Chart(document.getElementById('themesChart'), {
         type: 'doughnut',
         data: {
