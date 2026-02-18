@@ -224,6 +224,23 @@ app.get('/share/:token', (req, res) => {
 });
 
 // --- IMPORT/EXPORT ROUTES ---
+// Account page (GET)
+app.get('/account', (req, res) => {
+    if (!req.user) return res.redirect('/login');
+    res.render('account', { user: req.user });
+});
+
+// Share page (GET)
+app.get('/account/share', (req, res) => {
+    if (!req.user) return res.redirect('/login');
+    res.render('account', { user: req.user }); // Reuse account.ejs for share UI
+});
+
+// Import/Export page (GET)
+app.get('/import', (req, res) => {
+    if (!req.user) return res.redirect('/login');
+    res.render('import', { user: req.user });
+});
 // Export collection (GET)
 app.get('/account/export', (req, res) => {
     if (!req.user) return res.status(401).send('Não autenticado');
