@@ -655,9 +655,11 @@ app.get('/admin/sets', ensureAdmin, (req, res) => {
     let sortDir = req.query.dir === 'desc' ? 'DESC' : 'ASC';
     if (!sortMap[sort]) sort = 'set_num';
     const orderBy = `${sortMap[sort]} ${sortDir}`;
-    db.all(`SELECT s.*, t.name as theme_name FROM sets s LEFT JOIN themes t ON s.theme_id = t.id ORDER BY ${orderBy} LIMIT ? OFFSET ?`, [limit, offset], (err, rows) => {
-        db.get("SELECT COUNT(*) as count FROM sets", (e, c) => {
-            res.render('admin/sets', { sets: rows, pagination: { page, totalPages: Math.ceil(c.count/limit) }, sort, sortDir });
+    db.all("SELECT id, name FROM themes ORDER BY name", [], (err, allThemes) => {
+        db.all(`SELECT s.*, t.name as theme_name FROM sets s LEFT JOIN themes t ON s.theme_id = t.id ORDER BY ${orderBy} LIMIT ? OFFSET ?`, [limit, offset], (err2, rows) => {
+            db.get("SELECT COUNT(*) as count FROM sets", (e, c) => {
+                res.render('admin/sets', { sets: rows, pagination: { page, totalPages: Math.ceil(c.count/limit) }, sort, sortDir, allThemes });
+            });
         });
     });
 });
