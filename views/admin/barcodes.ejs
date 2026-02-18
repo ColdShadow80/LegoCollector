@@ -274,8 +274,10 @@
             const set = document.getElementById('setFilter').value;
             const barcode = document.getElementById('barcodeFilter').value;
             const sort = document.querySelector('[name="sort"]').value;
-            // Flip unknown filter
-            const unknown = '<%= filters.unknown === "1" ? "" : "1" %>';
+            // Flip unknown filter based on button class
+            const btn = document.getElementById('unknownToggle');
+            const isActive = btn.classList.contains('btn-primary');
+            const unknown = isActive ? '' : '1';
             const params = [
                 `page=1`,
                 `theme=${encodeURIComponent(theme)}`,
