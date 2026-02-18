@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="pt" data-bs-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - Códigos de Barras</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <style>
+        body { background-color: #f8f9fa; }
+        .table-hover tbody tr:hover { background-color: #f0f0f0 !important; }
+        .badge-theme { background-color: #007bff; }
+        .badge-status-found { background-color: #28a745; }
+        .badge-status-missing { background-color: #dc3545; }
+        .filter-card { background-color: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-dark bg-dark mb-4 px-3">
+        <a class="navbar-brand" href="/">🧱 Admin Painel</a>
+        <div class="d-flex flex-column flex-md-row gap-2 align-items-md-center">
+            <div>
+                <span class="fw-bold text-secondary me-2">Gestão:</span>
+                <a href="/admin/themes" class="btn btn-outline-light btn-sm me-2">Temas</a>
+                <a href="/admin/sets" class="btn btn-outline-light btn-sm me-2">Sets</a>
+                <a href="/admin/barcodes" class="btn btn-outline-light btn-sm">Códigos de Barras</a>
+            </div>
+            <div class="vr d-none d-md-inline mx-2" style="height:32px;"></div>
+            <div>
+                <a href="/admin/users" class="btn btn-outline-primary btn-sm me-2">Utilizadores</a>
+                <a href="/" class="btn btn-outline-light btn-sm">Voltar ao Site</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid px-4">
+        <div class="mb-4">
+            <h2>Gerir Códigos de Barras</h2>
+            <p class="text-muted">Total: <strong><%= pagination.totalBarcodes %></strong> códigos</p>
+        </div>
+
+        <!-- Filters -->
+        <div class="filter-card">
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label small fw-bold">Filtrar por Tema</label>
+                    <form method="GET" id="filterForm" class="d-flex gap-2">
+                        <select class="form-select form-select-sm" name="theme" onchange="applyFilters()">
+                            <option value="">Todos os Temas</option>
+                            <% themes.forEach(t => { %>
+                                <option value="<%= t.id %>" <%= filters.theme == t.id ? 'selected' : '' %>><%= t.name %></option>
+                            <% }) %>
+                        </select>
+                    </form>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small fw-bold">Filtrar por Set</label>
+                    <div class="input-group input-group-sm">
+                        <input type="text" class="form-control" id="setFilter" placeholder="Número ou nome..." value="<%= filters.set %>">
+                        <button class="btn btn-outline-secondary" type="button" onclick="filterBySet()">🔍</button>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small fw-bold">Filtrar por Código</label>
+                    <div class="input-group input-group-sm">
+                        <input type="text" class="form-control" id="barcodeFilter" placeholder="Código..." value="<%= filters.barcode %>">
+                        <button class="btn btn-outline-secondary" type="button" onclick="filterByBarcode()">🔍</button>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small fw-bold">Ordenar por</label>
+                    <select class="form-select form-select-sm" name="sort" onchange="applyFilters()">
+                        <option value="barcode_asc" <%= filters.sort == 'barcode_asc' ? 'selected' : '' %>>Código (A-Z)</option>
+                        <option value="barcode_desc" <%= filters.sort == 'barcode_desc' ? 'selected' : '' %>>Código (Z-A)</option>
+                        <option value="theme_asc" <%= filters.sort == 'theme_asc' ? 'selected' : '' %>>Tema (A-Z)</option>
+                        <option value="theme_desc" <%= filters.sort == 'theme_desc' ? 'selected' : '' %>>Tema (Z-A)</option>
+                        <option value="set_asc" <%= filters.sort == 'set_asc' ? 'selected' : '' %>>Set (A-Z)</option>
+                        <option value="set_desc" <%= filters.sort == 'set_desc' ? 'selected' : '' %>>Set (Z-A)</option>
+                    </select>
+                </div>
+                <div class="col-md-3 d-flex align-items-end">
+
+                        <div class="btn-group w-100" role="group" aria-label="Filtro desconhecidos">
+                            <button type="button" class="btn btn-sm <%= filters.unknown !== '1' ? 'btn-primary active' : 'btn-outline-secondary' %>" onclick="setUnknownFilter(0)">Mostrar todos os sets</button>
+                            <button type="button" class="btn btn-sm <%= filters.unknown === '1' ? 'btn-primary active' : 'btn-outline-secondary' %>" onclick="setUnknownFilter(1)">Apenas desconhecidos</button>
+                        </div>
+                </div>
+            </div>
+            <div class="mt-3">
+                <a href="/admin/barcodes" class="btn btn-outline-secondary btn-sm">Limpar Filtros</a>
+            </div>
+        </div>
+
+        <!-- Table -->
+        <div class="bg-white rounded shadow-sm overflow-hidden">
+            <table class="table table-hover mb-0">
+                <thead class="bg-light border-bottom">
+                    <tr>
+                        <th style="width: 20%; cursor:pointer;" onclick="sortBy('barcode')">Código de Barras <i class="bi bi-arrow-down-up"></i></th>
+                        <th style="width: 15%; cursor:pointer;" onclick="sortBy('theme')">Tema <i class="bi bi-arrow-down-up"></i></th>
+                        <th style="width: 20%;">Set</th>
+                        <th style="width: 12%; cursor:pointer;" onclick="sortBy('set')">Número <i class="bi bi-arrow-down-up"></i></th>
+                        <th style="width: 10%;">Ano</th>
+                        <th style="width: 12%;">Peças</th>
+                        <th style="width: 11%;">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <% if (barcodes.length === 0) { %>
+                        <tr>
+                            <td colspan="7" class="text-center py-5 text-muted">
+                                <i class="bi bi-inbox"></i> Nenhum código de barras encontrado
+                            </td>
+                        </tr>
+                    <% } else { %>
+                        <% barcodes.forEach(barcode => { %>
+                            <tr>
+                                <td>
+                                    <span id="codeDisplay-<%= barcode.code %>"><code class="bg-light px-2 py-1 rounded"><%= barcode.code %></code></span>
+                                    <input type="text" class="form-control form-control-sm bg-light px-2 py-1 rounded d-none" id="codeEdit-<%= barcode.code %>" value="<%= barcode.code %>" data-old-code="<%= barcode.code %>" readonly>
+                                </td>
+                                <td>
+                                    <% if (barcode.theme_name) { %>
+                                        <span class="badge badge-theme"><%= barcode.theme_name %></span>
+                                    <% } else { %>
+                                        <span class="text-muted small">Sem tema</span>
+                                    <% } %>
+                                </td>
+                                <td>
+                                    <% if (barcode.set_name) { %>
+                                        <a href="/set/<%= encodeURIComponent(barcode.set_num) %>" class="text-decoration-none" title="<%= barcode.set_name %>">
+                                            <%= barcode.set_name.length > 30 ? barcode.set_name.substr(0, 30) + '...' : barcode.set_name %>
+                                        </a>
+                                    <% } else { %>
+                                        <span class="text-muted small">Set não encontrado</span>
+                                    <% } %>
+                                </td>
+                                <td>
+                                    <span id="setNumDisplay-<%= barcode.code %>"><code><%= barcode.set_num || '' %></code></span>
+                                    <input type="text" class="form-control form-control-sm d-none" id="setNumEdit-<%= barcode.code %>" value="<%= barcode.set_num || '' %>" data-old-code="<%= barcode.code %>" readonly>
+                                </td>
+                                <td>
+                                    <% if (barcode.year) { %>
+                                        <%= barcode.year %>
+                                    <% } else { %>
+                                        <span class="text-muted">-</span>
+                                    <% } %>
+                                </td>
+                                <td>
+                                    <% if (barcode.num_parts) { %>
+                                        <%= barcode.num_parts %>
+                                    <% } else { %>
+                                        <span class="text-muted">-</span>
+                                    <% } %>
+                                </td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-secondary me-1" id="editBtn-<%= barcode.code %>" onclick="enableEdit('<%= barcode.code %>')">
+                                        <i class="bi bi-pencil"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-success me-1 d-none" id="saveBtn-<%= barcode.code %>" onclick="saveEdit('<%= barcode.code %>')">
+                                        <i class="bi bi-check"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-danger" onclick="deleteBarcode('<%= barcode.code %>')">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        <% }) %>
+                    <% } %>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        <% if (pagination.totalPages > 1) { %>
+        <nav class="mt-4 d-flex justify-content-center">
+            <ul class="pagination">
+                <li class="page-item <%= pagination.page == 1 ? 'disabled' : '' %>">
+                    <a class="page-link" href="<%= `/admin/barcodes?page=${pagination.page - 1}&theme=${filters.theme}&set=${filters.set}&barcode=${filters.barcode}&sort=${filters.sort}` %>">
+                        &laquo; Anterior
+                    </a>
+                </li>
+                
+                <% for (let i = Math.max(1, pagination.page - 2); i <= Math.min(pagination.totalPages, pagination.page + 2); i++) { %>
+                    <li class="page-item <%= pagination.page == i ? 'active' : '' %>">
+                        <a class="page-link" href="<%= `/admin/barcodes?page=${i}&theme=${filters.theme}&set=${filters.set}&barcode=${filters.barcode}&sort=${filters.sort}` %>">
+                            <%= i %>
+                        </a>
+                    </li>
+                <% } %>
+                
+                <li class="page-item <%= pagination.page >= pagination.totalPages ? 'disabled' : '' %>">
+                    <a class="page-link" href="<%= `/admin/barcodes?page=${pagination.page + 1}&theme=${filters.theme}&set=${filters.set}&barcode=${filters.barcode}&sort=${filters.sort}` %>">
+                        Próximo &raquo;
+                    </a>
+                </li>
+            </ul>
+        </nav>
+        <div class="text-center text-muted small mt-3">
+            Página <%= pagination.page %> de <%= pagination.totalPages %> (<%= pagination.totalBarcodes %> total)
+        </div>
+        <% } %>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+                        // Update label on page load
+                        document.addEventListener('DOMContentLoaded', function() {
+                            const unknownToggle = document.getElementById('unknownToggle');
+                            const unknownLabel = document.getElementById('unknownLabel');
+                            if (unknownToggle && unknownLabel) {
+                                unknownLabel.textContent = unknownToggle.checked ? 'Mostrar todos os sets' : 'Mostrar apenas sets desconhecidos';
+                            }
+                        });
+                function enableEdit(code) {
+                    document.getElementById('codeDisplay-' + code).classList.add('d-none');
+                    document.getElementById('codeEdit-' + code).classList.remove('d-none');
+                    document.getElementById('codeEdit-' + code).removeAttribute('readonly');
+                    document.getElementById('setNumDisplay-' + code).classList.add('d-none');
+                    document.getElementById('setNumEdit-' + code).classList.remove('d-none');
+                    document.getElementById('setNumEdit-' + code).removeAttribute('readonly');
+                    document.getElementById('editBtn-' + code).classList.add('d-none');
+                    document.getElementById('saveBtn-' + code).classList.remove('d-none');
+                    document.getElementById('codeEdit-' + code).focus();
+                }
+
+                function saveEdit(code) {
+                    const codeInput = document.getElementById('codeEdit-' + code);
+                    const setNumInput = document.getElementById('setNumEdit-' + code);
+                    const old_code = codeInput.getAttribute('data-old-code');
+                    const new_code = codeInput.value.trim();
+                    const set_num = setNumInput.value.trim();
+                    let body = { old_code };
+                    if (new_code !== old_code) body.new_code = new_code;
+                    body.set_num = set_num;
+                    fetch('/admin/barcodes/update', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(body)
+                    })
+                    .then(res => res.json())
+                    .then(data => {
+                        if (!data.success) {
+                            alert('Erro ao atualizar: ' + (data.error || ''));
+                        } else {
+                            // Update display
+                            document.getElementById('codeDisplay-' + code).innerHTML = `<code class="bg-light px-2 py-1 rounded">${new_code}</code>`;
+                            document.getElementById('setNumDisplay-' + code).innerHTML = `<code>${set_num}</code>`;
+                            codeInput.setAttribute('data-old-code', new_code);
+                            codeInput.value = new_code;
+                            setNumInput.value = set_num;
+                            codeInput.setAttribute('readonly', true);
+                            setNumInput.setAttribute('readonly', true);
+                            document.getElementById('codeDisplay-' + code).classList.remove('d-none');
+                            document.getElementById('codeEdit-' + code).classList.add('d-none');
+                            document.getElementById('setNumDisplay-' + code).classList.remove('d-none');
+                            document.getElementById('setNumEdit-' + code).classList.add('d-none');
+                            document.getElementById('editBtn-' + code).classList.remove('d-none');
+                            document.getElementById('saveBtn-' + code).classList.add('d-none');
+                        }
+                    })
+                    .catch(err => alert('Erro: ' + err));
+                }
+        function applyFilters() {
+            const theme = document.querySelector('[name="theme"]').value;
+            const set = document.getElementById('setFilter').value;
+            const barcode = document.getElementById('barcodeFilter').value;
+            const sort = document.querySelector('[name="sort"]').value;
+            const unknown = document.getElementById('unknownToggle')?.classList.contains('btn-primary') ? '1' : '';
+            const params = [
+                `page=1`,
+                `theme=${encodeURIComponent(theme)}`,
+                `set=${encodeURIComponent(set)}`,
+                `barcode=${encodeURIComponent(barcode)}`,
+                `sort=${encodeURIComponent(sort)}`
+            ];
+            if (unknown) params.push('unknown=1');
+            const url = `/admin/barcodes?${params.join('&')}`;
+            window.location.href = url;
+        }
+
+        function toggleUnknown() {
+            const theme = document.querySelector('[name="theme"]').value;
+            const set = document.getElementById('setFilter').value;
+            const barcode = document.getElementById('barcodeFilter').value;
+            const sort = document.querySelector('[name="sort"]').value;
+            const unknown = document.getElementById('unknownToggle').checked ? '1' : '';
+            const params = [
+                `page=1`,
+                `theme=${encodeURIComponent(theme)}`,
+                `set=${encodeURIComponent(set)}`,
+                `barcode=${encodeURIComponent(barcode)}`,
+                `sort=${encodeURIComponent(sort)}`
+            ];
+            if (unknown) params.push('unknown=1');
+            const url = `/admin/barcodes?${params.join('&')}`;
+            window.location.href = url;
+        }
+            function setUnknownFilter(val) {
+                const theme = document.querySelector('[name="theme"]').value;
+                const set = document.getElementById('setFilter').value;
+                const barcode = document.getElementById('barcodeFilter').value;
+                const sort = document.querySelector('[name="sort"]').value;
+                const unknown = val === 1 ? '1' : '';
+                const params = [
+                    `page=1`,
+                    `theme=${encodeURIComponent(theme)}`,
+                    `set=${encodeURIComponent(set)}`,
+                    `barcode=${encodeURIComponent(barcode)}`,
+                    `sort=${encodeURIComponent(sort)}`
+                ];
+                if (unknown) params.push('unknown=1');
+                const url = `/admin/barcodes?${params.join('&')}`;
+                window.location.href = url;
+            }
+
+        function filterBySet() {
+            applyFilters();
+        }
+
+        function filterByBarcode() {
+            applyFilters();
+        }
+        function sortBy(col) {
+            let sort = document.querySelector('[name="sort"]').value;
+            if (col === 'barcode') {
+                sort = sort === 'barcode_asc' ? 'barcode_desc' : 'barcode_asc';
+            } else if (col === 'theme') {
+                sort = sort === 'theme_asc' ? 'theme_desc' : 'theme_asc';
+            } else if (col === 'set') {
+                sort = sort === 'set_asc' ? 'set_desc' : 'set_asc';
+            }
+            document.querySelector('[name="sort"]').value = sort;
+            applyFilters();
+        }
+
+        function updateBarcode(input, field) {
+            const old_code = input.getAttribute('data-old-code');
+            let body = { old_code };
+            if (field === 'code') {
+                body.new_code = input.value.trim();
+            } else if (field === 'set_num') {
+                body.set_num = input.value.trim();
+            }
+            fetch('/admin/barcodes/update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (!data.success) {
+                    alert('Erro ao atualizar: ' + (data.error || '')); 
+                } else {
+                    if (field === 'code') {
+                        input.setAttribute('data-old-code', input.value.trim());
+                    }
+                }
+            })
+            .catch(err => alert('Erro: ' + err));
+        }
+
+        function deleteBarcode(code) {
+            if (confirm(`Tem certeza que deseja eliminar o código ${code}?`)) {
+                fetch('/admin/barcodes/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ code: code })
+                })
+                .then(res => {
+                    if (res.ok) {
+                        location.reload();
+                    } else {
+                        alert('Erro ao eliminar código');
+                    }
+                })
+                .catch(err => alert('Erro: ' + err));
+            }
+        }
+
+        // Allow Enter key to search
+        document.getElementById('setFilter')?.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') filterBySet();
+        });
+        document.getElementById('barcodeFilter')?.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') filterByBarcode();
+        });
+    </script>
+</body>
+</html>

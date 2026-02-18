@@ -1,59 +1,211 @@
 <!DOCTYPE html>
-<html lang="pt" data-bs-theme="<%= user.dark_mode ? 'dark' : 'light' %>">
+<html lang="pt">
 <head>
     <meta charset="UTF-8">
-    <title>Gestão de Temas - Admin</title>
+    <title>Admin Temas</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
-<body class="p-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h3>🛠️ Gestão de Temas</h3>
-        <a href="/" class="btn btn-outline-secondary">Voltar ao Site</a>
-    </div>
+<body class="bg-light">
+    <nav class="navbar navbar-dark bg-dark mb-4 px-3">
+        <a class="navbar-brand" href="/">🧱 Admin Painel</a>
+        <div class="d-flex flex-column flex-md-row gap-2 align-items-md-center">
+            <div>
+                <span class="fw-bold text-secondary me-2">Gestão:</span>
+                <a href="/admin/themes" class="btn btn-outline-light btn-sm me-2">Temas</a>
+                <a href="/admin/sets" class="btn btn-outline-light btn-sm me-2">Sets</a>
+                <a href="/admin/barcodes" class="btn btn-outline-light btn-sm">Códigos de Barras</a>
+            </div>
+            <div class="vr d-none d-md-inline mx-2" style="height:32px;"></div>
+            <div>
+                <a href="/admin/users" class="btn btn-outline-primary btn-sm me-2">Utilizadores</a>
+                <a href="/" class="btn btn-outline-light btn-sm">Voltar ao Site</a>
+                <button class="btn btn-success btn-sm ms-2" data-bs-toggle="modal" data-bs-target="#newThemeModal">Novo Tema</button>
+            </div>
+        </div>
+    </nav>
+    <div class="container">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h3>Gerir Temas</h3>
+            <input id="themeSearch" class="form-control form-control-sm w-50" placeholder="Procurar tema...">
+                <script>
+                // Prevent session loss on filter submit
+                document.addEventListener('submit', function(e) {
+                    // No session clearing or redirect
+                });
+                </script>
+        </div>
 
-    <input type="text" id="searchTheme" class="form-control mb-3" placeholder="Filtrar temas...">
-
-    <div class="table-responsive" style="max-height: 80vh; overflow-y: auto;">
-        <table class="table table-sm table-hover table-bordered">
-            <thead class="table-light sticky-top">
+        <table class="table table-striped bg-white shadow-sm rounded align-middle">
+            <thead>
                 <tr>
-                    <th>Nome</th>
-                    <th>Anos</th>
-                    <th class="text-center">Total Sets</th>
-                    <th class="text-center">Sets (0 Pçs)</th>
-                    <th class="text-center bg-warning-subtle">Ocultar do Site</th>
-                    <th class="text-center bg-danger-subtle">Ignorar Peças (Sync)</th>
+                    <th><a href="?sort=id&dir=<%= sort === 'id' && sortDir === 'ASC' ? 'desc' : 'asc' %>" class="text-decoration-none">ID<% if(sort==='id'){ %> <i class="bi bi-caret-<%= sortDir==='ASC'?'up':'down' %>-fill"></i><% } %></a></th>
+                    <th><a href="?sort=name&dir=<%= sort === 'name' && sortDir === 'ASC' ? 'desc' : 'asc' %>" class="text-decoration-none">Nome<% if(sort==='name'){ %> <i class="bi bi-caret-<%= sortDir==='ASC'?'up':'down' %>-fill"></i><% } %></a></th>
+                    <th><a href="?sort=total_sets&dir=<%= sort === 'total_sets' && sortDir === 'ASC' ? 'desc' : 'asc' %>" class="text-decoration-none">Sets<% if(sort==='total_sets'){ %> <i class="bi bi-caret-<%= sortDir==='ASC'?'up':'down' %>-fill"></i><% } %></a></th>
+                    <th><a href="?sort=total_pieces&dir=<%= sort === 'total_pieces' && sortDir === 'ASC' ? 'desc' : 'asc' %>" class="text-decoration-none">Peças<% if(sort==='total_pieces'){ %> <i class="bi bi-caret-<%= sortDir==='ASC'?'up':'down' %>-fill"></i><% } %></a></th>
+                    <th><a href="?sort=min_year&dir=<%= sort === 'min_year' && sortDir === 'ASC' ? 'desc' : 'asc' %>" class="text-decoration-none">Período<% if(sort==='min_year'){ %> <i class="bi bi-caret-<%= sortDir==='ASC'?'up':'down' %>-fill"></i><% } %></a></th>
+                    <th>Atualização Peças</th>
+                    <th>Esconder?</th>
+                    <th>Ações</th>
                 </tr>
             </thead>
-            <tbody id="themeTable">
+            <tbody id="themesBody">
                 <% themes.forEach(t => { %>
-                    <tr>
-                        <td><%= t.name %></td>
-                        <td class="small text-muted"><%= t.min_year %> - <%= t.max_year %></td>
-                        <td class="text-center"><%= t.total_sets %></td>
-                        <td class="text-center <%= t.zero_part_sets > 0 ? 'text-danger fw-bold' : '' %>"><%= t.zero_part_sets %></td>
-                        <td class="text-center">
-                            <input type="checkbox" class="form-check-input" <%= t.is_hidden ? 'checked' : '' %> onchange="toggleTheme(<%= t.id %>, 'is_hidden', this.checked)">
-                        </td>
-                        <td class="text-center">
-                            <input type="checkbox" class="form-check-input" <%= t.ignore_parts ? 'checked' : '' %> onchange="toggleTheme(<%= t.id %>, 'ignore_parts', this.checked)">
-                        </td>
-                    </tr>
+                <% 
+                    // Use Bootstrap table-warning for either zero sets or zero pieces
+                    var rowClass = (!t.total_sets || t.total_sets === 0 || !t.total_pieces || t.total_pieces === 0) ? 'table-warning' : '';
+                    var updateToggleVal = (t.update_status === 'all' ? 0 : 1);
+                    var safeName = (t.name||'').replace(/'/g, "\\'");
+                    var checked = t.is_hidden ? 'checked' : '';
+                    var updateAllBtn = '';
+                    if (t.sets_count > 0) {
+                        updateAllBtn = '<button class="btn btn-sm btn-outline-secondary ms-2" onclick="toggleUpdateAll(' + t.id + ', ' + updateToggleVal + ')" title="Alternar atualização de peças para todos os sets"><i class="bi bi-arrow-repeat"></i></button>';
+                    }
+                    function escapeJsString(str) {
+                        return str.replace(/'/g, "\\'");
+                    }
+                %>
+                <tr data-name="<%= t.name.toLowerCase() %>" class="<%= rowClass %>">
+                    <td><%= t.id %></td>
+                    <td><%= t.name %></td>
+                    <td><%= t.total_sets %></td>
+                    <td><%= t.total_pieces %></td>
+                    <td><%= t.min_year ? (t.min_year + (t.max_year && t.max_year !== t.min_year ? ' - ' + t.max_year : '')) : '' %></td>
+                    <td>
+                        <% if (t.sets_count === 0) { %>
+                            <span class="badge bg-secondary">N/A</span>
+                        <% } else if (t.update_status === 'all') { %>
+                            <span class="badge bg-danger">Todos</span>
+                        <% } else if (t.update_status === 'none') { %>
+                            <span class="badge bg-success">Não</span>
+                        <% } else { %>
+                            <span class="badge bg-warning text-dark">Parcial</span>
+                            <span class="small">(<%= t.sets_count - t.ignore_parts_count %> ativos, <%= t.ignore_parts_count %> desativados)</span>
+                        <% } %>
+                        <%- updateAllBtn %>
+                    </td>
+                    <td>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" onchange="toggle(<%= t.id %>, 'is_hidden', this.checked)" <% if (t.is_hidden) { %>checked<% } %>>
+                        </div>
+                    </td>
+                    <td>
+                        <% var tNameEscaped = (t.name||'').replace(/'/g, "\\'"); %>
+                        <button class="btn btn-sm btn-outline-primary" onclick="openEdit(<%= t.id %>, '<%= tNameEscaped %>', <%= t.is_hidden ? 'true' : 'false' %>)">Editar</button>
+                    </td>
+                </tr>
                 <% }) %>
             </tbody>
         </table>
     </div>
 
+    <!-- New Theme Modal -->
+    <div class="modal fade" id="newThemeModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Criar Novo Tema</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input id="newThemeId" class="form-control mb-2" placeholder="ID único (número)">
+                    <input id="newThemeName" class="form-control" placeholder="Nome do tema">
+                    <div id="themeCreateError" class="alert alert-danger d-none mt-2"></div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button class="btn btn-success" id="createThemeBtn">Criar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Modal -->
+    <div class="modal fade" id="editThemeModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Editar Tema</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="editThemeId">
+                    <label class="small text-muted">Nome</label>
+                    <input id="editThemeName" class="form-control mb-2">
+                    <div class="form-check">
+                        <input id="editThemeHidden" class="form-check-input" type="checkbox">
+                        <label class="form-check-label">Esconder tema</label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button class="btn btn-primary" id="saveThemeBtn">Guardar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        document.getElementById('searchTheme').addEventListener('keyup', function(e) {
-            const term = e.target.value.toLowerCase();
-            document.querySelectorAll('#themeTable tr').forEach(row => {
-                row.style.display = row.cells[0].textContent.toLowerCase().includes(term) ? '' : 'none';
+        document.getElementById('themeSearch').addEventListener('input', (e) => {
+            const q = e.target.value.trim().toLowerCase();
+            document.querySelectorAll('#themesBody tr').forEach(r => {
+                r.style.display = (!q || r.dataset.name.includes(q)) ? '' : 'none';
             });
         });
-        async function toggleTheme(id, field, value) {
-            try { await fetch('/admin/themes/toggle', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ theme_id: id, field, value })}); } catch(e) { alert('Erro'); }
+
+
+        async function toggle(id, field, val) {
+            await fetch('/admin/themes/toggle', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ theme_id: id, field: field, value: val }) });
         }
+
+        async function toggleUpdateAll(themeId, toDisable) {
+            await fetch('/admin/themes/toggle', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ theme_id: themeId, field: 'ignore_parts', value: toDisable, update_sets: true }) });
+            location.reload();
+        }
+
+        document.getElementById('createThemeBtn').addEventListener('click', async () => {
+            const id = document.getElementById('newThemeId').value.trim();
+            const name = document.getElementById('newThemeName').value.trim();
+            const errorDiv = document.getElementById('themeCreateError');
+            errorDiv.classList.add('d-none');
+            if (!id || !/^[0-9]+$/.test(id)) {
+                errorDiv.textContent = 'ID obrigatório (número único)';
+                errorDiv.classList.remove('d-none');
+                return;
+            }
+            if (!name) {
+                errorDiv.textContent = 'Nome obrigatório';
+                errorDiv.classList.remove('d-none');
+                return;
+            }
+            const res = await fetch('/admin/themes/create', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ id, name }) });
+            const data = await res.json();
+            if (data && data.error === 'id_exists') {
+                errorDiv.textContent = 'ID já existe. Escolha outro.';
+                errorDiv.classList.remove('d-none');
+                return;
+            }
+            if (res.ok && data.success) location.reload();
+            else {
+                errorDiv.textContent = 'Erro ao criar tema.';
+                errorDiv.classList.remove('d-none');
+            }
+        });
+
+        function openEdit(id, name, is_hidden) {
+            document.getElementById('editThemeId').value = id;
+            document.getElementById('editThemeName').value = name;
+            document.getElementById('editThemeHidden').checked = !!is_hidden;
+            new bootstrap.Modal(document.getElementById('editThemeModal')).show();
+        }
+
+        document.getElementById('saveThemeBtn').addEventListener('click', async () => {
+            const id = document.getElementById('editThemeId').value;
+            const name = document.getElementById('editThemeName').value.trim();
+            const is_hidden = document.getElementById('editThemeHidden').checked;
+            const res = await fetch('/admin/themes/update', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ id, name, is_hidden }) });
+            if (res.ok) location.reload(); else alert('Erro a guardar');
+        });
     </script>
 </body>
 </html>

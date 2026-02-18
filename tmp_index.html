@@ -1,0 +1,185 @@
+﻿<!DOCTYPE html>
+<html lang="pt" data-bs-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LegoTracker V7</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+    <style>
+        body { transition: background-color 0.3s, color 0.3s; }
+        .set-card img { height: 160px; object-fit: contain; padding: 5px; transition: transform 0.2s; }
+        .set-card:hover img { transform: scale(1.05); }
+        [data-bs-theme="dark"] .card { background-color: #2b3035; border-color: #495057; }
+        
+        /* Estilos de Estado */
+        [data-bs-theme="dark"] .is-owned { background-color: #1a4d2e !important; border-color: #2ea043; }
+        [data-bs-theme="light"] .is-owned { border: 2px solid #198754; background-color: #f0fff4; }
+        
+        [data-bs-theme="dark"] .is-wanted { background-color: #4a1e2c !important; border-color: #e91e63; }
+        [data-bs-theme="light"] .is-wanted { border: 2px solid #e91e63; background-color: #fff0f5; }
+
+        .badge-owned { position: absolute; top: 5px; right: 5px; font-size: 0.7em; }
+        .sidebar-scroll { max-height: 60vh; overflow-y: auto; }
+        .pagination-select { border: none; background-color: transparent; font-weight: bold; text-align: center; cursor: pointer; }
+        [data-bs-theme="dark"] .pagination-select { color: white; background-color: #212529; }
+        
+        .card-actions .btn { border-radius: 50%; width: 32px; height: 32px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+    </style>
+</head>
+<body>
+
+<nav class="navbar navbar-expand-lg border-bottom mb-4">
+    <div class="container-fluid px-4">
+        <a class="navbar-brand fw-bold" href="/">🧱 LegoTracker</a>
+        
+        <div class="d-flex align-items-center gap-3">
+            
+                <a href="/login" class="btn btn-primary btn-sm rounded-pill px-3">Entrar</a>
+            
+        </div>
+    </div>
+</nav>
+
+<div class="container-fluid px-4">
+    <div class="row">
+        <div class="col-md-3 col-lg-2 mb-4">
+            <form action="/" method="GET" id="filterForm">
+                <div class="d-grid gap-2 mb-3">
+                    <button type="submit" class="btn btn-primary btn-sm">Aplicar</button>
+                    <a href="/" class="btn btn-outline-secondary btn-sm">Limpar</a>
+                </div>
+                <div class="mb-3">
+                    <label class="small fw-bold">Estado</label>
+                    <select name="status" class="form-select form-select-sm">
+                        <option value="">Tudo</option>
+                        <option value="owned" >Tenho</option>
+                        <option value="wanted" >Quero</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="small fw-bold">Pesquisa</label>
+                    <input type="text" name="q" class="form-control form-control-sm" value="">
+                </div>
+                <div class="mb-3">
+                    <label class="small fw-bold">Ano</label>
+                    <select name="year" class="form-select form-select-sm">
+                        <option value="">Todos</option>
+                        
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="small fw-bold">Temas</label>
+                    <input type="text" id="themeSearchInput" class="form-control form-control-sm mb-2" placeholder="Filtrar...">
+                    <div class="sidebar-scroll border rounded p-2 bg-body-tertiary" id="themeListContainer">
+                        
+                    </div>
+                </div>
+                <input type="hidden" name="limit" id="limitInput" value="24">
+                <input type="hidden" name="page" value="1">
+            </form>
+        </div>
+
+        <div class="col-md-9 col-lg-10">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <span class="text-muted small">0 sets</span>
+                <select class="form-select form-select-sm" style="width: 80px;" onchange="changeLimit(this.value)">
+                    <option value="25" >25</option>
+                    <option value="50" >50</option>
+                    <option value="100" >100</option>
+                    <option value="all" >Tds</option>
+                </select>
+            </div>
+
+            <div class="text-center py-5 text-muted"><h3>👻</h3><p>Nada.</p></div>
+
+            <div class="accordion" id="accordionThemes">
+            
+            
+            </div>
+            
+            
+        </div>
+    </div>
+</div>
+
+            <!-- Scanner Modal -->
+            <div class="modal fade" id="scannerModal" tabindex="-1">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Scanner de Código de Barras</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body text-center">
+                            <div id="reader" style="width: 100%;"></div>
+                            <p class="mt-2 text-muted small">Aponte a câmera para o código de barras da caixa.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    // Scanner integration (uses html5-qrcode)
+    (function() {
+        const scannerModal = document.getElementById('scannerModal');
+        let html5QrcodeScanner = null;
+
+        if (scannerModal) {
+            scannerModal.addEventListener('shown.bs.modal', () => {
+                if (!html5QrcodeScanner) {
+                    html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
+                    html5QrcodeScanner.render(onScanSuccess);
+                }
+            });
+
+            scannerModal.addEventListener('hidden.bs.modal', () => {
+                if (html5QrcodeScanner) {
+                    try { html5QrcodeScanner.clear(); } catch(e){}
+                    html5QrcodeScanner = null;
+                    document.getElementById('reader').innerHTML = '';
+                }
+            });
+        }
+
+        function onScanSuccess(decodedText, decodedResult) {
+            // Redirect to search with decoded text
+            window.location.href = `/?q=${encodeURIComponent(decodedText)}`;
+        }
+    })();
+    document.getElementById('themeSearchInput').addEventListener('keyup', function(e) {
+        const term = e.target.value.toLowerCase();
+        document.querySelectorAll('.theme-item').forEach(item => {
+            const text = item.querySelector('.label-text').textContent.toLowerCase();
+            item.style.display = text.includes(term) ? '' : 'none';
+        });
+    });
+
+    function changeLimit(val) { document.getElementById('limitInput').value = val; savePref('items_per_page', val); submitPage(1); }
+    function changePage(p) { if(p>0) submitPage(p); }
+    function submitPage(p) { document.querySelector('input[name="page"]').value = p; document.getElementById('filterForm').submit(); }
+    
+    document.getElementById('darkModeSwitch')?.addEventListener('change', (e) => {
+        document.documentElement.setAttribute('data-bs-theme', e.target.checked ? 'dark' : 'light'); savePref('dark_mode', e.target.checked);
+    });
+    async function savePref(k, v) { try{ fetch('/api/preferences', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({[k]:v})}); }catch(e){} }
+
+    async function toggleStatus(setNum, targetStatus) {
+        // Se clicar em Owned e já for Owned, ou Wanted e já for Wanted -> Remove
+        const card = document.getElementById('card-' + setNum);
+        const currentStatus = card.classList.contains('is-owned') ? 'OWNED' : (card.classList.contains('is-wanted') ? 'WANTED' : null);
+        
+        let newStatus = targetStatus;
+        if (currentStatus === targetStatus) newStatus = 'REMOVE';
+
+        try {
+            const res = await fetch('/api/toggle', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({set_num: setNum, status: newStatus})});
+            if (res.ok) window.location.reload(); // Refresh para atualizar ícones corretamente
+        } catch(e) { alert('Erro'); }
+    }
+</script>
+</body>
+</html>
+

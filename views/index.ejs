@@ -6,6 +6,7 @@
     <title>LegoTracker V7</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
     <style>
         body { transition: background-color 0.3s, color 0.3s; }
         .set-card img { height: 160px; object-fit: contain; padding: 5px; transition: transform 0.2s; }
@@ -25,6 +26,14 @@
         [data-bs-theme="dark"] .pagination-select { color: white; background-color: #212529; }
         
         .card-actions .btn { border-radius: 50%; width: 32px; height: 32px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+        
+        /* Responsive filters: desktop sidebar + mobile drawer */
+        .sidebar-container { display: block; }
+        .sidebar-drawer { display: none; }
+        @media (max-width: 767.98px) {
+            .sidebar-container { display: none; }
+            .sidebar-drawer { display: block; }
+        }
     </style>
 </head>
 <body>
@@ -35,22 +44,40 @@
         
         <div class="d-flex align-items-center gap-3">
             <% if (user) { %>
+                <div class="nav-item">
+                    <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#scannerModal" title="Abrir Scanner">
+                        <i class="bi bi-upc-scan"></i>
+                    </button>
+                </div>
                 <div class="form-check form-switch pt-1">
                     <input class="form-check-input" type="checkbox" id="darkModeSwitch" <%= user.dark_mode ? 'checked' : '' %>>
                     <label class="form-check-label"><i class="bi bi-moon-stars"></i></label>
                 </div>
+                <% if (user.id === 1) { %>
+                <div class="dropdown">
+                    <button class="btn btn-sm btn-outline-danger dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                        <i class="bi bi-shield-lock"></i> Admin
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><h6 class="dropdown-header">Administração</h6></li>
+                        <li><a class="dropdown-item" href="/admin/users">Utilizadores</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><span class="dropdown-header small text-secondary">Gestão</span></li>
+                        <li><a class="dropdown-item" href="/admin/themes">Temas</a></li>
+                        <li><a class="dropdown-item" href="/admin/sets">Sets</a></li>
+                        <li><a class="dropdown-item" href="/admin/barcodes">Códigos de Barras</a></li>
+                    </ul>
+                </div>
+                <% } %>
                 <div class="dropdown">
                     <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">👤 <%= user.name %></button>
                     <ul class="dropdown-menu dropdown-menu-end">
-                        <% if (user.id === 1) { %>
-                            <li><h6 class="dropdown-header">Admin</h6></li>
-                            <li><a class="dropdown-item" href="/admin/sets">Sets</a></li>
-                            <li><a class="dropdown-item" href="/admin/themes">Temas</a></li>
-                            <li><a class="dropdown-item" href="/admin/users">Users</a></li>
-                            <li><hr class="dropdown-divider"></li>
-                        <% } %>
                         <li><a class="dropdown-item" href="/?status=owned">Minha Coleção</a></li>
                         <li><a class="dropdown-item" href="/?status=wanted">Lista de Desejos</a></li>
+                        <li><a class="dropdown-item" href="/statistics">Estatísticas</a></li>
+                        <li><a class="dropdown-item" href="/account">Minha Conta</a></li>
+                        <li><a class="dropdown-item" href="/account/share">Partilhar Coleção</a></li>
+                        <li><a class="dropdown-item" href="/import">Importar/Exportar</a></li>
                         <li><hr class="dropdown-divider"></li>
                         <li><a class="dropdown-item text-danger" href="/logout">Sair</a></li>
                     </ul>
@@ -63,24 +90,36 @@
 </nav>
 
 <div class="container-fluid px-4">
+    <!-- Mobile Filter Button -->
+    <div class="d-lg-none d-flex justify-content-between align-items-center mb-3">
+        <span class="text-muted small"><%= pagination.totalItems %> sets</span>
+        <button class="btn btn-outline-primary btn-sm" data-bs-toggle="offcanvas" data-bs-target="#filtersOffcanvas" title="Abrir Filtros">
+            <i class="bi bi-funnel"></i> Filtros
+        </button>
+    </div>
+    
     <div class="row">
-        <div class="col-md-3 col-lg-2 mb-4">
+        <div class="col-md-3 col-lg-2 mb-4 sidebar-container">
             <form action="/" method="GET" id="filterForm">
+                <input type="hidden" name="status" value="<%= typeof query.status !== 'undefined' ? query.status : '' %>">
                 <div class="d-grid gap-2 mb-3">
                     <button type="submit" class="btn btn-primary btn-sm">Aplicar</button>
-                    <a href="/" class="btn btn-outline-secondary btn-sm">Limpar</a>
+                                        <% /* Limpar: clear all filters, preserve user context if on user page */ %>
+                                        <% let clearUrl = '/';
+                                             if (user && query.status) {
+                                                 clearUrl = '/?status=' + encodeURIComponent(query.status);
+                                             } else if (user) {
+                                                 clearUrl = '/?status=';
+                                             }
+                                        %>
+                                        <a href="<%= clearUrl %>" class="btn btn-outline-secondary btn-sm">Limpar</a>
                 </div>
                 <div class="mb-3">
-                    <label class="small fw-bold">Estado</label>
-                    <select name="status" class="form-select form-select-sm">
-                        <option value="">Tudo</option>
-                        <option value="owned" <%= query.status == 'owned' ? 'selected' : '' %>>Tenho</option>
-                        <option value="wanted" <%= query.status == 'wanted' ? 'selected' : '' %>>Quero</option>
-                    </select>
+                    <!-- Estado filter removed: now only top toggle is used -->
                 </div>
                 <div class="mb-3">
                     <label class="small fw-bold">Pesquisa</label>
-                    <input type="text" name="search" class="form-control form-control-sm" value="<%= query.search || '' %>">
+                    <input type="text" name="q" class="form-control form-control-sm" value="<%= query.search || '' %>">
                 </div>
                 <div class="mb-3">
                     <label class="small fw-bold">Ano</label>
@@ -97,10 +136,16 @@
                     <div class="sidebar-scroll border rounded p-2 bg-body-tertiary" id="themeListContainer">
                         <% allThemes.forEach(t => { %>
                             <div class="form-check mb-1 theme-item">
-                                <input class="form-check-input" type="checkbox" name="themes" value="<%= t.name %>" id="t-<%= t.name %>"
-                                <% if (query.themes && (query.themes === t.name || (Array.isArray(query.themes) && query.themes.includes(t.name)))) { %> checked <% } %>>
-                                <label class="form-check-label small lh-sm" for="t-<%= t.name %>">
-                                    <span class="d-block text-truncate label-text" style="max-width: 180px;"><%= t.name %></span>
+                                <input class="form-check-input" type="checkbox" name="themes" value="<%= t.ids.join(',') %>" id="t-<%= t.ids[0] %>"
+                                <% if (query.themes && (
+                                    (typeof query.themes === 'string' && query.themes.split(',').some(id => t.ids.includes(Number(id)))) ||
+                                    (Array.isArray(query.themes) && query.themes.some(qid => qid.split(',').some(id => t.ids.includes(Number(id)))))
+                                )) { %> checked <% } %>>
+                                <label class="form-check-label small lh-sm d-flex justify-content-between align-items-center" for="t-<%= t.ids[0] %>">
+                                    <span class="d-block text-truncate label-text" style="max-width: 140px;"><%= t.name %></span>
+                                    <% if (t.min_year) { %>
+                                        <small class="text-muted ms-2">(<%= t.min_year %><%= t.min_year !== t.max_year ? ' - ' + t.max_year : '' %>)</small>
+                                    <% } %>
                                 </label>
                             </div>
                         <% }) %>
@@ -112,9 +157,23 @@
         </div>
 
         <div class="col-md-9 col-lg-10">
-            <div class="d-flex justify-content-between align-items-center mb-3">
+            <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
                 <span class="text-muted small"><%= pagination.totalItems %> sets</span>
-                <select class="form-select form-select-sm" style="width: 80px;" onchange="changeLimit(this.value)">
+                <% if (user) { %>
+                <div class="btn-group" role="group" aria-label="Estado">
+                    <a href="/?<%= (() => {
+                        const q = { ...query, status: '' };
+                        const params = Object.entries(q)
+                            .filter(([k,v]) => k !== 'status' && v)
+                            .map(([k,v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`);
+                        params.push('status=');
+                        return params.join('&');
+                    })() %>" class="btn btn-outline-secondary btn-sm <%= !query.status ? 'active' : '' %>">Tudo</a>
+                    <a href="/?<%= Object.entries({ ...query, status: 'owned' }).filter(([k,v]) => v).map(([k,v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join('&') %>" class="btn btn-outline-success btn-sm <%= query.status === 'owned' ? 'active' : '' %>">Tenho</a>
+                    <a href="/?<%= Object.entries({ ...query, status: 'wanted' }).filter(([k,v]) => v).map(([k,v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join('&') %>" class="btn btn-outline-danger btn-sm <%= query.status === 'wanted' ? 'active' : '' %>">Quero</a>
+                </div>
+                <% } %>
+                <select id="limitSelect" class="form-select form-select-sm" style="width: 80px;" onchange="changeLimit(this.value)">
                     <option value="25" <%= pagination.limit == 25 ? 'selected' : '' %>>25</option>
                     <option value="50" <%= pagination.limit == 50 ? 'selected' : '' %>>50</option>
                     <option value="100" <%= pagination.limit == 100 ? 'selected' : '' %>>100</option>
@@ -152,7 +211,7 @@
                                 <span class="fw-bold text-primary">#<%= set.set_num %></span> • <%= set.year %> • <%= set.num_parts %> pçs
                             </div>
                             <div class="mt-auto card-actions d-flex justify-content-center gap-2">
-                                <a href="/set/<%= set.set_num %>" class="btn btn-outline-secondary" title="Ver Detalhes"><i class="bi bi-eye"></i></a>
+                                <a href="/set/<%= encodeURIComponent(set.set_num) %>" class="btn btn-outline-secondary" title="Ver Detalhes"><i class="bi bi-eye"></i></a>
                                 
                                 <% if (user) { %>
                                     <button class="btn <%= set.user_status === 'WANTED' ? 'btn-danger' : 'btn-outline-danger' %>" 
@@ -192,19 +251,333 @@
     </div>
 </div>
 
+    <!-- Mobile Filters Offcanvas (drawer) -->
+    <div class="offcanvas offcanvas-start sidebar-drawer" tabindex="-1" id="filtersOffcanvas">
+        <div class="offcanvas-header border-bottom">
+            <h5 class="offcanvas-title">Filtros</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
+        </div>
+        <div class="offcanvas-body p-0">
+            <form action="/" method="GET" id="filterFormMobile" class="d-flex flex-column h-100">
+                <div class="flex-grow-1 overflow-y-auto p-3">
+                    <!-- Estado -->
+                    <div class="mb-3">
+                        <label class="small fw-bold">Estado</label>
+                        <select name="status" class="form-select form-select-sm">
+                            <option value="">Tudo</option>
+                            <option value="owned" <%= query.status == 'owned' ? 'selected' : '' %>>Tenho</option>
+                            <option value="wanted" <%= query.status == 'wanted' ? 'selected' : '' %>>Quero</option>
+                        </select>
+                    </div>
+
+                    <!-- Pesquisa -->
+                    <div class="mb-3">
+                        <label class="small fw-bold">Pesquisa</label>
+                        <input type="text" name="q" class="form-control form-control-sm" value="<%= query.search || '' %>" placeholder="Nome ou número">
+                    </div>
+
+                    <!-- Ano -->
+                    <div class="mb-3">
+                        <label class="small fw-bold">Ano</label>
+                        <select name="year" class="form-select form-select-sm">
+                            <option value="">Todos</option>
+                            <% allYears.forEach(y => { %>
+                                <option value="<%= y.year %>" <%= query.year == y.year ? 'selected' : '' %>><%= y.year %></option>
+                            <% }) %>
+                        </select>
+                    </div>
+
+                    <!-- Temas em Accordion -->
+                    <div class="mb-3">
+                        <label class="small fw-bold d-block mb-2">Temas</label>
+                        <input type="text" id="themeSearchInputMobile" class="form-control form-control-sm mb-2" placeholder="Filtrar temas...">
+                        <div class="accordion accordion-flush" id="themesAccordion">
+                            <% allThemes.forEach((t, idx) => { %>
+                                <div class="accordion-item theme-item-mobile">
+                                    <h2 class="accordion-header">
+                                        <button class="accordion-button collapsed p-2" type="button" data-bs-toggle="collapse" data-bs-target="#t-collapse-<%= idx %>">
+                                            <small class="label-text"><%= t.name %></small>
+                                            <% if (t.min_year) { %>
+                                                <small class="text-muted ms-auto"><%= t.min_year %><%= t.min_year !== t.max_year ? ' - ' + t.max_year : '' %></small>
+                                            <% } %>
+                                        </button>
+                                    </h2>
+                                    <div id="t-collapse-<%= idx %>" class="accordion-collapse collapse" data-bs-parent="#themesAccordion">
+                                        <div class="accordion-body p-2">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" name="themes" value="<%= t.id %>" id="tm-<%= t.id %>"
+                                                <% if (query.themes && (query.themes == t.id || (Array.isArray(query.themes) && query.themes.includes(String(t.id))))) { %> checked <% } %>>
+                                                <label class="form-check-label small" for="tm-<%= t.id %>">
+                                                    Selecionar
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            <% }) %>
+                        </div>
+                    </div>
+
+                    <!-- Items per page (mobile) -->
+                    <div class="mb-3">
+                        <label class="small fw-bold">Items por página</label>
+                        <select class="form-select form-select-sm" onchange="changeLimit(this.value)" id="limitSelectMobile">
+                            <option value="25" <%= pagination.limit == 25 ? 'selected' : '' %>>25</option>
+                            <option value="50" <%= pagination.limit == 50 ? 'selected' : '' %>>50</option>
+                            <option value="100" <%= pagination.limit == 100 ? 'selected' : '' %>>100</option>
+                            <option value="all" <%= pagination.limit > 1000 ? 'selected' : '' %>>Tds</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Botões fixos no fundo do offcanvas -->
+                <div class="p-3 border-top bg-body sticky-bottom d-grid gap-2">
+                    <button type="submit" class="btn btn-primary btn-sm">Aplicar Filtros</button>
+                    <a href="/" class="btn btn-outline-secondary btn-sm">Limpar Filtros</a>
+                </div>
+
+                <input type="hidden" name="limit" id="limitInputMobile" value="<%= pagination.limit %>">
+                <input type="hidden" name="page" value="<%= pagination.page %>">
+            </form>
+        </div>
+    </div>
+
+            <!-- Scanner Modal -->
+            <div class="modal fade" id="scannerModal" tabindex="-1">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Scanner de Código de Barras</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body text-center">
+                            <div id="reader" style="width: 100%;"></div>
+                            <p class="mt-2 text-muted small">Aponte a câmera para o código de barras da caixa.</p>
+
+                            <div id="scanResult" class="mt-3 d-none">
+                                <div class="mb-2">
+                                    <label class="small text-muted">Código lido</label>
+                                    <input type="text" id="scannedCode" class="form-control form-control-sm" readonly>
+                                </div>
+                                <div class="mb-2">
+                                    <label class="small text-muted">Pesquisar código</label>
+                                    <div class="d-flex gap-2">
+                                        <button id="searchBarcodeBtn" class="btn btn-primary btn-sm flex-grow-1">Pesquisar</button>
+                                        <button id="copyCodeBtn" class="btn btn-outline-secondary btn-sm">Copiar</button>
+                                    </div>
+                                    <div id="barcodeSearchResult" class="mt-2"></div>
+                                </div>
+
+                                <% if (user) { %>
+                                <div class="mt-2 border-top pt-2">
+                                    <label class="small fw-bold">Falhou? Ensine ao sistema</label>
+                                    <div class="input-group input-group-sm mt-1">
+                                        <input type="text" id="teachSetNum" class="form-control" placeholder="Número do set (ex: 75360)">
+                                        <button id="teachBtn" class="btn btn-success">Ensinar</button>
+                                    </div>
+                                    <div id="teachFeedback" class="small mt-2"></div>
+                                </div>
+                                <% } else { %>
+                                <div class="mt-2 small text-muted">Para ensinar um código, inicie sessão.</div>
+                                <% } %>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-    document.getElementById('themeSearchInput').addEventListener('keyup', function(e) {
-        const term = e.target.value.toLowerCase();
-        document.querySelectorAll('.theme-item').forEach(item => {
-            const text = item.querySelector('.label-text').textContent.toLowerCase();
-            item.style.display = text.includes(term) ? '' : 'none';
-        });
+    // Scanner integration (uses html5-qrcode)
+    (function() {
+        const scannerModal = document.getElementById('scannerModal');
+        let html5QrcodeScanner = null;
+        let currentScannedCode = '';
+
+        if (scannerModal) {
+            scannerModal.addEventListener('shown.bs.modal', () => {
+                if (!html5QrcodeScanner) {
+                    html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
+                    html5QrcodeScanner.render(onScanSuccess);
+                }
+            });
+
+            scannerModal.addEventListener('hidden.bs.modal', () => {
+                if (html5QrcodeScanner) {
+                    try { html5QrcodeScanner.clear(); } catch(e){}
+                    html5QrcodeScanner = null;
+                    document.getElementById('reader').innerHTML = '';
+                }
+                // reset scan UI
+                const scanResult = document.getElementById('scanResult');
+                if (scanResult) {
+                    scanResult.classList.add('d-none');
+                    const sc = document.getElementById('scannedCode'); if (sc) sc.value = '';
+                    const ts = document.getElementById('teachSetNum'); if (ts) ts.value = '';
+                    const fb = document.getElementById('teachFeedback'); if (fb) fb.textContent = '';
+                    const sr = document.getElementById('barcodeSearchResult'); if (sr) sr.innerHTML = '';
+                }
+            });
+        }
+
+        function onScanSuccess(decodedText, decodedResult) {
+            currentScannedCode = decodedText;
+            // Populate the modal with the decoded text and show actions
+            const scanResult = document.getElementById('scanResult');
+            const scannedCode = document.getElementById('scannedCode');
+            if (scannedCode) scannedCode.value = decodedText;
+            if (scanResult) scanResult.classList.remove('d-none');
+
+            // Wire search button
+            const barcodeSearchResult = document.getElementById('barcodeSearchResult');
+            const searchBarcodeBtn = document.getElementById('searchBarcodeBtn');
+            if (searchBarcodeBtn) searchBarcodeBtn.onclick = async () => {
+                if (barcodeSearchResult) {
+                    barcodeSearchResult.innerHTML = '<span class="text-muted small">Pesquisando...</span>';
+                    try {
+                        const res = await fetch(`/api/barcode-lookup/${encodeURIComponent(currentScannedCode)}`);
+                        const data = await res.json();
+                        if (data.found && data.set) {
+                            barcodeSearchResult.innerHTML = `<div class='alert alert-success p-2 d-flex align-items-center gap-2'><img src='${data.set.img_url || 'https://via.placeholder.com/60'}' style='height:40px;width:auto;border-radius:4px;'> <div><b>${data.set.name}</b><br><span class='text-muted small'>ID: ${data.set.set_num}</span><br><a href='/set/${encodeURIComponent(data.set.set_num)}' class='btn btn-sm btn-outline-primary mt-1'>Ver detalhes</a></div></div>`;
+                        } else {
+                            barcodeSearchResult.innerHTML = `<div class='alert alert-warning p-2'>Nenhum set encontrado para este código.<br>Você pode ensinar o sistema abaixo.</div>`;
+                        }
+                    } catch(e) {
+                        barcodeSearchResult.innerHTML = '<span class="text-danger small">Erro ao pesquisar.</span>';
+                    }
+                }
+            };
+
+            const copyCodeBtn = document.getElementById('copyCodeBtn');
+            if (copyCodeBtn) copyCodeBtn.onclick = async () => {
+                try { await navigator.clipboard.writeText(currentScannedCode); } catch(e) { }
+            };
+
+            // Teach button only present for authenticated users
+            const teachBtn = document.getElementById('teachBtn');
+            if (teachBtn) {
+                teachBtn.onclick = async () => {
+                    const setNum = document.getElementById('teachSetNum')?.value?.trim();
+                    const feedback = document.getElementById('teachFeedback');
+                    if (!setNum) { if (feedback) feedback.textContent = 'Digite o número do set.'; return; }
+                    teachBtn.disabled = true;
+                    if (feedback) feedback.textContent = 'Verificando...';
+                    try {
+                        // Check for exact match
+                        let res = await fetch(`/api/set-search?q=${encodeURIComponent(setNum)}`);
+                        let data = await res.json();
+                        if (data.results && data.results.length > 0) {
+                            const exact = data.results.find(s => s.set_num === setNum);
+                            if (exact) {
+                                // Save mapping
+                                feedback.textContent = 'Salvando mapeamento...';
+                                let saveRes = await fetch('/api/barcode/teach', {
+                                    method: 'POST', headers: {'Content-Type':'application/json'},
+                                    body: JSON.stringify({ code: currentScannedCode, set_num: setNum })
+                                });
+                                if (saveRes.status === 401) {
+                                    feedback.textContent = 'Inicie sessão para ensinar códigos.';
+                                } else if (saveRes.ok) {
+                                    feedback.textContent = 'Mapeamento salvo.';
+                                } else {
+                                    const txt = await saveRes.text();
+                                    feedback.textContent = 'Erro: ' + (txt || saveRes.status);
+                                }
+                            } else {
+                                // Show partial matches for user to select
+                                feedback.innerHTML = 'Nenhum set exato encontrado. Selecione abaixo:<ul>' +
+                                    data.results.map(s => `<li><a href="#" class="set-sel" data-setnum="${s.set_num}">${s.set_num} - ${s.name}</a></li>`).join('') + '</ul>';
+                                document.querySelectorAll('.set-sel').forEach(el => {
+                                    el.onclick = async (e) => {
+                                        e.preventDefault();
+                                        const chosen = el.getAttribute('data-setnum');
+                                        feedback.textContent = 'Salvando mapeamento...';
+                                        let saveRes = await fetch('/api/barcode/teach', {
+                                            method: 'POST', headers: {'Content-Type':'application/json'},
+                                            body: JSON.stringify({ code: currentScannedCode, set_num: chosen })
+                                        });
+                                        if (saveRes.status === 401) {
+                                            feedback.textContent = 'Inicie sessão para ensinar códigos.';
+                                        } else if (saveRes.ok) {
+                                            feedback.textContent = 'Mapeamento salvo.';
+                                        } else {
+                                            const txt = await saveRes.text();
+                                            feedback.textContent = 'Erro: ' + (txt || saveRes.status);
+                                        }
+                                    };
+                                });
+                            }
+                        } else {
+                            feedback.textContent = 'Nenhum set encontrado.';
+                        }
+                    } catch(e) {
+                        if (feedback) feedback.textContent = 'Erro de rede.';
+                    } finally { teachBtn.disabled = false; }
+                };
+            }
+        }
+    })();
+    
+    // Debounced theme search (prevents excessive DOM updates on every keypress)
+    let desktopSearchTimeout;
+    document.getElementById('themeSearchInput')?.addEventListener('keyup', function(e) {
+        clearTimeout(desktopSearchTimeout);
+        desktopSearchTimeout = setTimeout(() => {
+            const term = e.target.value.toLowerCase();
+            document.querySelectorAll('.theme-item').forEach(item => {
+                const text = item.querySelector('.label-text').textContent.toLowerCase();
+                item.style.display = text.includes(term) ? '' : 'none';
+            });
+        }, 150); // 150ms debounce delay
     });
 
-    function changeLimit(val) { document.getElementById('limitInput').value = val; savePref('items_per_page', val); submitPage(1); }
+    // Debounced mobile theme search (accordion)
+    let mobileSearchTimeout;
+    document.getElementById('themeSearchInputMobile')?.addEventListener('keyup', function(e) {
+        clearTimeout(mobileSearchTimeout);
+        mobileSearchTimeout = setTimeout(() => {
+            const term = e.target.value.toLowerCase();
+            document.querySelectorAll('.theme-item-mobile').forEach(item => {
+                const text = item.querySelector('.label-text').textContent.toLowerCase();
+                item.style.display = text.includes(term) ? '' : 'none';
+            });
+        }, 150); // 150ms debounce delay
+    });
+
+    function changeLimit(val) { 
+        // Update both hidden inputs and both visible selects
+        const limitInput = document.getElementById('limitInput');
+        const limitInputMobile = document.getElementById('limitInputMobile');
+        const limitSelect = document.getElementById('limitSelect');
+        const limitSelectMobile = document.getElementById('limitSelectMobile');
+        
+        if (limitInput) limitInput.value = val;
+        if (limitInputMobile) limitInputMobile.value = val;
+        if (limitSelect) limitSelect.value = val;
+        if (limitSelectMobile) limitSelectMobile.value = val;
+        
+        savePref('items_per_page', val); 
+        submitPage(1); 
+    }
     function changePage(p) { if(p>0) submitPage(p); }
-    function submitPage(p) { document.querySelector('input[name="page"]').value = p; document.getElementById('filterForm').submit(); }
+    function submitPage(p) { 
+        // Determine which form to submit based on visibility
+        const filterForm = document.getElementById('filterForm');
+        const filterFormMobile = document.getElementById('filterFormMobile');
+        
+        // Check which form is visible (desktop or mobile)
+        const desktopVisible = filterForm && window.getComputedStyle(filterForm).display !== 'none';
+        const form = desktopVisible ? filterForm : filterFormMobile;
+        
+        if (form) {
+            // Set page number in the appropriate form
+            const pageInput = form.querySelector('input[name="page"]');
+            if (pageInput) pageInput.value = p;
+            form.submit();
+        } else {
+            console.error('No form found to submit');
+        }
+    }
     
     document.getElementById('darkModeSwitch')?.addEventListener('change', (e) => {
         document.documentElement.setAttribute('data-bs-theme', e.target.checked ? 'dark' : 'light'); savePref('dark_mode', e.target.checked);

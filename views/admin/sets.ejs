@@ -1,156 +1,187 @@
 <!DOCTYPE html>
-<html lang="pt" data-bs-theme="<%= user.dark_mode ? 'dark' : 'light' %>">
+<html lang="pt">
 <head>
     <meta charset="UTF-8">
-    <title>Gerir Sets - Admin</title>
+    <title>Admin Sets</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
-    <style>
-        .sidebar-scroll { max-height: 60vh; overflow-y: auto; }
-        .set-thumb { width: 50px; height: 50px; object-fit: contain; }
-    </style>
 </head>
-<body>
-
-<nav class="navbar navbar-expand-lg border-bottom mb-4">
-    <div class="container-fluid px-4">
-        <a class="navbar-brand fw-bold" href="/admin/themes">🛠️ Admin</a>
-        <div class="d-flex gap-3">
-            <a href="/" class="btn btn-outline-secondary btn-sm">Voltar ao Site</a>
-            <div class="dropdown">
-                <button class="btn btn-sm btn-secondary dropdown-toggle" data-bs-toggle="dropdown">Admin Menu</button>
-                <ul class="dropdown-menu dropdown-menu-end">
-                    <li><a class="dropdown-item" href="/admin/sets">🧱 Gerir Sets</a></li>
-                    <li><a class="dropdown-item" href="/admin/themes">🎨 Gerir Temas</a></li>
-                    <li><a class="dropdown-item" href="/admin/users">👥 Gerir Utilizadores</a></li>
-                </ul>
+<body class="bg-light">
+    <nav class="navbar navbar-dark bg-dark mb-4 px-3">
+        <a class="navbar-brand" href="/">🧱 Admin Painel</a>
+        <div class="d-flex flex-column flex-md-row gap-2 align-items-md-center">
+            <div>
+                <span class="fw-bold text-secondary me-2">Gestão:</span>
+                <a href="/admin/themes" class="btn btn-outline-light btn-sm me-2">Temas</a>
+                <a href="/admin/sets" class="btn btn-outline-light btn-sm me-2">Sets</a>
+                <a href="/admin/barcodes" class="btn btn-outline-light btn-sm">Códigos de Barras</a>
+            </div>
+            <div class="vr d-none d-md-inline mx-2" style="height:32px;"></div>
+            <div>
+                <a href="/admin/users" class="btn btn-outline-primary btn-sm me-2">Utilizadores</a>
+                <a href="/" class="btn btn-outline-light btn-sm me-2">Voltar ao Site</a>
+                <a href="/admin/sets?export=csv" class="btn btn-outline-light btn-sm">Exportar CSV</a>
             </div>
         </div>
+    </nav>
+    <div class="container">
+        <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+            <h3>Gerir Sets</h3>
+            <form method="get" class="d-flex gap-2 align-items-center flex-wrap">
+                <input id="setSearch" name="q" class="form-control form-control-sm" style="min-width:200px;" placeholder="Procurar sets (numero / nome)..." value="<%= typeof q !== 'undefined' ? q : '' %>">
+                <select name="theme" class="form-select form-select-sm">
+                    <option value="">Todos os Temas</option>
+                    <% if (typeof allThemes !== 'undefined') { allThemes.forEach(theme => { %>
+                        <option value="<%= theme.id %>" <%= (typeof theme_id !== 'undefined' && theme_id == theme.id) ? 'selected' : '' %>>
+                            <%= theme.name %>
+                            <% if (theme.set_count > 0) { %>
+                                ( <%= theme.set_count %> sets, <%= theme.total_pieces || 0 %> peças, <%= theme.min_year %><% if(theme.max_year && theme.max_year !== theme.min_year){ %> - <%= theme.max_year %><% } %> )
+                            <% } %>
+                        </option>
+                    <% }) } %>
+                </select>
+                <button type="submit" class="btn btn-sm btn-outline-secondary">Filtrar</button>
+            </form>
+            <script>
+            // Prevent session loss on filter submit
+            document.querySelector('form').addEventListener('submit', function(e) {
+                // No session clearing or redirect
+            });
+            </script>
+        </div>
+
+        <table class="table table-striped bg-white shadow-sm rounded align-middle">
+            <thead>
+                <tr>
+                    <th><a href="?sort=set_num&dir=<%= sort === 'set_num' && sortDir === 'ASC' ? 'desc' : 'asc' %>" class="text-decoration-none">Set<% if(sort==='set_num'){ %> <i class="bi bi-caret-<%= sortDir==='ASC'?'up':'down' %>-fill"></i><% } %></a></th>
+                    <th style="width:56px;text-align:center;">Imagem</th>
+                    <th><a href="?sort=name&dir=<%= sort === 'name' && sortDir === 'ASC' ? 'desc' : 'asc' %>" class="text-decoration-none">Nome<% if(sort==='name'){ %> <i class="bi bi-caret-<%= sortDir==='ASC'?'up':'down' %>-fill"></i><% } %></a></th>
+                    <th><a href="?sort=theme_name&dir=<%= sort === 'theme_name' && sortDir === 'ASC' ? 'desc' : 'asc' %>" class="text-decoration-none">Tema<% if(sort==='theme_name'){ %> <i class="bi bi-caret-<%= sortDir==='ASC'?'up':'down' %>-fill"></i><% } %></a></th>
+                    <th><a href="?sort=year&dir=<%= sort === 'year' && sortDir === 'ASC' ? 'desc' : 'asc' %>" class="text-decoration-none">Ano<% if(sort==='year'){ %> <i class="bi bi-caret-<%= sortDir==='ASC'?'up':'down' %>-fill"></i><% } %></a></th>
+                    <th><a href="?sort=num_parts&dir=<%= sort === 'num_parts' && sortDir === 'ASC' ? 'desc' : 'asc' %>" class="text-decoration-none">Peças<% if(sort==='num_parts'){ %> <i class="bi bi-caret-<%= sortDir==='ASC'?'up':'down' %>-fill"></i><% } %></a></th>
+                    <th><a href="?sort=price_eur&dir=<%= sort === 'price_eur' && sortDir === 'ASC' ? 'desc' : 'asc' %>" class="text-decoration-none">Preço<% if(sort==='price_eur'){ %> <i class="bi bi-caret-<%= sortDir==='ASC'?'up':'down' %>-fill"></i><% } %></a></th>
+                    <th>Esconder?</th>
+                    <th>Ignorar Peças?</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody id="setsBody">
+                <% sets.forEach(set => { %>
+                <tr data-term="<%= (set.set_num + ' ' + (set.name||'') + ' ' + (set.theme_name||'')) .toLowerCase() %>">
+                    <td><%= set.set_num %></td>
+                    <td style="width:56px;text-align:center;vertical-align:middle;">
+                        <div style="width:48px;height:48px;display:flex;align-items:center;justify-content:center;background:#f8f9fa;border-radius:6px;overflow:hidden;margin:auto;">
+                            <% if (set.img_url) { %>
+                                <img src="<%= set.img_url %>" alt="img" style="max-width:44px;max-height:44px;object-fit:contain;display:block;">
+                            <% } else { %>
+                                <span style="color:#ccc;font-size:22px;">&#9632;</span>
+                            <% } %>
+                        </div>
+                    </td>
+                    <td style="vertical-align:middle;"><%= set.name %></td>
+                    <td style="vertical-align:middle;"><%= set.theme_name || '' %></td>
+                    <td><%= set.year %></td>
+                    <td><%= set.num_parts %></td>
+                    <td><%= set.price_eur ? ('€' + set.price_eur) : '' %></td>
+                    <td>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" onchange="toggle('<%= set.set_num %>', 'is_hidden', this.checked)" <%= set.is_hidden ? 'checked' : '' %>>
+                        </div>
+                    </td>
+                    <td>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" onchange="toggle('<%= set.set_num %>', 'ignore_parts', this.checked)" <%= set.ignore_parts ? 'checked' : '' %>>
+                        </div>
+                    </td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-primary" onclick="openEdit('<%= set.set_num %>', '<%= (set.name||'').replace(/'/g, "\\'") %>', '<%= set.year %>', '<%= set.price_eur %>')">Editar</button>
+                    </td>
+                </tr>
+                <% }) %>
+            </tbody>
+        </table>
+
+        <div class="d-flex justify-content-between">
+            <% if(pagination.page > 1) { %><a href="?page=<%= pagination.page - 1 %>" class="btn btn-secondary">Anterior</a><% } %>
+            <span>Página <%= pagination.page %> de <%= pagination.totalPages %></span>
+            <% if(pagination.page < pagination.totalPages) { %><a href="?page=<%= pagination.page + 1 %>" class="btn btn-secondary">Próximo</a><% } %>
+        </div>
     </div>
-</nav>
 
-<div class="container-fluid px-4">
-    <div class="row">
-        <div class="col-md-3 col-lg-2 mb-4">
-            <form action="/admin/sets" method="GET" id="filterForm">
-                <div class="d-grid gap-2 mb-3">
-                    <button type="submit" class="btn btn-primary btn-sm">Filtrar</button>
-                    <a href="/admin/sets" class="btn btn-outline-secondary btn-sm">Limpar</a>
+    <!-- Edit Set Modal -->
+    <div class="modal fade" id="editSetModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Editar Set</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
-
-                <div class="mb-3">
-                    <label class="small fw-bold">Pesquisa</label>
-                    <input type="text" name="search" class="form-control form-control-sm" value="<%= query.search || '' %>">
-                </div>
-
-                <div class="mb-3">
-                    <label class="small fw-bold">Ano</label>
-                    <select name="year" class="form-select form-select-sm">
-                        <option value="">Todos</option>
-                        <% allYears.forEach(y => { %>
-                            <option value="<%= y.year %>" <%= query.year == y.year ? 'selected' : '' %>><%= y.year %></option>
-                        <% }) %>
-                    </select>
-                </div>
-
-                <div class="mb-3">
-                    <label class="small fw-bold">Temas</label>
-                    <input type="text" id="themeSearchInput" class="form-control form-control-sm mb-2" placeholder="Filtrar...">
-                    <div class="sidebar-scroll border rounded p-2 bg-body-tertiary" id="themeListContainer">
-                        <% allThemes.forEach(t => { %>
-                            <div class="form-check mb-1 theme-item">
-                                <input class="form-check-input" type="checkbox" name="themes" value="<%= t.name %>" id="t-<%= t.name %>"
-                                <% if (query.themes && (query.themes === t.name || (Array.isArray(query.themes) && query.themes.includes(t.name)))) { %> checked <% } %>>
-                                <label class="form-check-label small lh-sm" for="t-<%= t.name %>">
-                                    <span class="d-block text-truncate label-text" style="max-width: 180px;"><%= t.name %></span>
-                                </label>
-                            </div>
-                        <% }) %>
+                <div class="modal-body">
+                    <input type="hidden" id="editSetNum">
+                    <label class="small text-muted">Nome</label>
+                    <input id="editSetName" class="form-control mb-2">
+                    <label class="small text-muted">Ano</label>
+                    <input id="editSetYear" class="form-control mb-2">
+                    <label class="small text-muted">Preço (€)</label>
+                    <input id="editSetPrice" class="form-control mb-2">
+                    <div class="form-check">
+                        <input id="editSetHidden" class="form-check-input" type="checkbox">
+                        <label class="form-check-label">Esconder set</label>
+                    </div>
+                    <div class="form-check mt-1">
+                        <input id="editSetIgnoreParts" class="form-check-input" type="checkbox">
+                        <label class="form-check-label">Ignorar numeração de peças</label>
                     </div>
                 </div>
-                <input type="hidden" name="page" value="1">
-            </form>
-        </div>
-
-        <div class="col-md-9 col-lg-10">
-            <h5 class="mb-3">Gestão de Sets (<%= pagination.totalItems %> encontrados)</h5>
-            
-            <div class="table-responsive">
-                <table class="table table-sm table-hover table-bordered align-middle">
-                    <thead class="table-light">
-                        <tr>
-                            <th style="width: 60px;">Img</th>
-                            <th>Set #</th>
-                            <th>Nome</th>
-                            <th>Ano</th>
-                            <th>Peças</th>
-                            <th class="text-center bg-warning-subtle">Ocultar</th>
-                            <th class="text-center bg-danger-subtle">Ignorar Sync</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <% sets.forEach(s => { %>
-                            <tr>
-                                <td class="text-center"><img src="<%= s.img_url %>" class="set-thumb" loading="lazy"></td>
-                                <td class="fw-bold"><%= s.set_num %></td>
-                                <td>
-                                    <span class="d-block text-truncate" style="max-width: 300px;" title="<%= s.name %>"><%= s.name %></span>
-                                    <small class="text-muted"><%= s.theme_name %></small>
-                                </td>
-                                <td><%= s.year %></td>
-                                <td><%= s.num_parts %></td>
-                                <td class="text-center">
-                                    <div class="form-check form-switch d-flex justify-content-center">
-                                        <input class="form-check-input" type="checkbox" <%= s.is_hidden ? 'checked' : '' %> onchange="toggleSet('<%= s.set_num %>', 'is_hidden', this.checked)">
-                                    </div>
-                                </td>
-                                <td class="text-center">
-                                    <div class="form-check form-switch d-flex justify-content-center">
-                                        <input class="form-check-input" type="checkbox" <%= s.ignore_parts ? 'checked' : '' %> onchange="toggleSet('<%= s.set_num %>', 'ignore_parts', this.checked)">
-                                    </div>
-                                </td>
-                            </tr>
-                        <% }) %>
-                    </tbody>
-                </table>
-            </div>
-
-            <% if (pagination.totalPages > 1) { %>
-                <div class="d-flex justify-content-center gap-2 mt-3">
-                    <button class="btn btn-sm btn-outline-primary" <%= pagination.page == 1 ? 'disabled' : '' %> onclick="changePage(<%= pagination.page - 1 %>)">Anterior</button>
-                    <span class="align-self-center small">Pág <%= pagination.page %> de <%= pagination.totalPages %></span>
-                    <button class="btn btn-sm btn-outline-primary" <%= pagination.page >= pagination.totalPages ? 'disabled' : '' %> onclick="changePage(<%= pagination.page + 1 %>)">Próximo</button>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button class="btn btn-primary" id="saveSetBtn">Guardar</button>
                 </div>
-            <% } %>
+            </div>
         </div>
     </div>
-</div>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-<script>
-    document.getElementById('themeSearchInput').addEventListener('keyup', function(e) {
-        const term = e.target.value.toLowerCase();
-        document.querySelectorAll('.theme-item').forEach(item => {
-            const text = item.querySelector('.label-text').textContent.toLowerCase();
-            item.style.display = text.includes(term) ? '' : 'none';
-        });
-    });
-
-    function changePage(p) {
-        const form = document.getElementById('filterForm');
-        form.querySelector('input[name="page"]').value = p;
-        form.submit();
-    }
-
-    async function toggleSet(id, field, value) {
-        try {
-            await fetch('/admin/sets/toggle', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ set_num: id, field, value })
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.getElementById('setSearch').addEventListener('input', (e) => {
+            const q = e.target.value.trim().toLowerCase();
+            document.querySelectorAll('#setsBody tr').forEach(r => {
+                r.style.display = (!q || r.dataset.term.includes(q)) ? '' : 'none';
             });
-        } catch(e) { alert('Erro ao guardar!'); }
-    }
-</script>
+        });
+
+        async function toggle(id, field, val) {
+            await fetch('/admin/sets/toggle', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ set_num: id, field: field, value: val }) });
+        }
+
+        function openEdit(setNum, name, year, price) {
+            // Find the row for this set
+            const row = Array.from(document.querySelectorAll('#setsBody tr')).find(r => r.querySelector('td') && r.querySelector('td').textContent.trim() === setNum);
+            let is_hidden = false, ignore_parts = false;
+            if (row) {
+                const hideSwitch = row.querySelector('input[type="checkbox"][onchange*="is_hidden"]');
+                const ignoreSwitch = row.querySelector('input[type="checkbox"][onchange*="ignore_parts"]');
+                is_hidden = hideSwitch ? hideSwitch.checked : false;
+                ignore_parts = ignoreSwitch ? ignoreSwitch.checked : false;
+            }
+            document.getElementById('editSetNum').value = setNum;
+            document.getElementById('editSetName').value = name || '';
+            document.getElementById('editSetYear').value = year || '';
+            document.getElementById('editSetPrice').value = price || '';
+            document.getElementById('editSetHidden').checked = is_hidden;
+            document.getElementById('editSetIgnoreParts').checked = ignore_parts;
+            new bootstrap.Modal(document.getElementById('editSetModal')).show();
+        }
+
+        document.getElementById('saveSetBtn').addEventListener('click', async () => {
+            const set_num = document.getElementById('editSetNum').value;
+            const name = document.getElementById('editSetName').value.trim();
+            const year = document.getElementById('editSetYear').value.trim();
+            const price = document.getElementById('editSetPrice').value.trim();
+            const is_hidden = document.getElementById('editSetHidden').checked;
+            const ignore_parts = document.getElementById('editSetIgnoreParts').checked;
+            const res = await fetch('/admin/sets/update', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ set_num, name, year, price_eur: price, is_hidden, ignore_parts }) });
+            if (res.ok) location.reload(); else alert('Erro ao guardar');
+        });
+    </script>
 </body>
 </html>

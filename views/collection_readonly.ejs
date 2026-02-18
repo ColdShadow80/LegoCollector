@@ -1,0 +1,45 @@
+<!-- Read-only collection view for public share links -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>LEGO Collection - Shared View</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+</head>
+<body>
+    <div class="container mt-4">
+        <h2>LEGO Collection Shared by <%= user.name || user.email %></h2>
+        <p>This is a read-only view of the user's collection.</p>
+        <div class="mb-3">
+            <span class="badge bg-info">Share Type: <%= type %></span>
+        </div>
+        <table class="table table-striped table-bordered">
+            <thead>
+                <tr>
+                    <th>Set Number</th>
+                    <th>Name</th>
+                    <th>Year</th>
+                    <th>Theme</th>
+                    <th>Status</th>
+                    <th>Quantity</th>
+                </tr>
+            </thead>
+            <tbody>
+                <% sets.forEach(function(set) { %>
+                    <tr>
+                        <td><%= set.set_num %></td>
+                        <td><%= set.name %></td>
+                        <td><%= set.year %></td>
+                        <td><%= set.theme_id %></td>
+                        <td><%= set.status %></td>
+                        <td><%= set.quantity %></td>
+                    </tr>
+                <% }); %>
+            </tbody>
+        </table>
+        <div class="alert alert-secondary mt-4">
+            <strong>Privacy:</strong> No editing or personal info is visible. Only collection data is shared.
+        </div>
+    </div>
+</body>
+</html>

@@ -1,3 +1,22 @@
+HTTP/1.1 302 Found
+X-Powered-By: Express
+Location: /login?error=google_not_configured
+Vary: Accept
+Content-Type: text/plain; charset=utf-8
+Content-Length: 56
+Date: Tue, 17 Feb 2026 09:04:56 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+
+HTTP/1.1 200 OK
+X-Powered-By: Express
+Content-Type: text/html; charset=utf-8
+Content-Length: 1672
+ETag: W/"688-3NKSDhzElZEZN3sCX6XPbVaaNps"
+Date: Tue, 17 Feb 2026 09:04:56 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+
 <!DOCTYPE html>
 <html lang="pt">
 <head>
@@ -14,9 +33,7 @@
         <div class="card-body p-4">
             <h3 class="fw-bold text-center mb-4">🧱 LegoTracker</h3>
             
-            <% if (locals.error) { %>
-                <div class="alert alert-danger py-2 small"><%= error %></div>
-            <% } %>
+            
 
             <a href="/auth/google" class="btn btn-outline-dark w-100 mb-3 fw-bold">
                 <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width="18" class="me-2">
