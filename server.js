@@ -833,6 +833,7 @@ app.get('/admin/barcodes', ensureAdmin, (req, res) => {
     const filterSet = req.query.set || '';
     const filterBarcode = req.query.barcode || '';
     const sortBy = req.query.sort || 'barcode_asc';
+    const showUnknown = req.query.unknown === '1';
     
     // Build WHERE clause
     let whereClauses = [];
@@ -848,6 +849,9 @@ app.get('/admin/barcodes', ensureAdmin, (req, res) => {
     if (filterBarcode) {
         whereClauses.push("b.code LIKE ?");
         params.push(`%${filterBarcode}%`);
+    }
+    if (showUnknown) {
+        whereClauses.push('(s.set_num IS NULL OR s.name IS NULL)');
     }
     const whereClause = whereClauses.length > 0 ? 'WHERE ' + whereClauses.join(' AND ') : '';
     
@@ -903,6 +907,22 @@ app.get('/admin/barcodes', ensureAdmin, (req, res) => {
 });
 
 // Delete barcode entry
+// Update barcode entry (barcode number or set ID)
+app.post('/admin/barcodes/update', ensureAdmin, express.json(), (req, res) => {
+    const { old_code, new_code, set_num } = req.body;
+    if (!old_code) return res.status(400).json({ error: 'missing_code' });
+    if (!new_code && set_num === undefined) return res.status(400).json({ error: 'missing_update' });
+    let updates = [];
+    let params = [];
+    if (new_code) { updates.push('code = ?'); params.push(new_code); }
+    if (set_num !== undefined) { updates.push('set_num = ?'); params.push(set_num || null); }
+    if (updates.length === 0) return res.json({ success: true });
+    params.push(old_code);
+    db.run(`UPDATE barcodes SET ${updates.join(', ')} WHERE code = ?`, params, function(err) {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ success: true });
+    });
+});
 app.post('/admin/barcodes/delete', ensureAdmin, express.json(), (req, res) => {
     const { code } = req.body;
     if (!code) return res.status(400).json({ error: 'missing_code' });
