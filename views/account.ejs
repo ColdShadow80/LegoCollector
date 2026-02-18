@@ -64,14 +64,15 @@
                 <div class="card mb-4">
                     <div class="card-body">
                         <h5 class="card-title">Ações da Conta</h5>
-                            <button class="btn btn-sm btn-outline-success mb-2" id="exportBtn">Exportar Coleção (JSON)</button>
-                            <form id="importForm" enctype="multipart/form-data" style="display:inline-block;width:100%">
-                                <input type="file" name="file" accept="application/json" class="form-control mb-2" required>
-                                <button type="submit" class="btn btn-sm btn-outline-success mb-2 w-100">Importar Coleção</button>
-                            </form>
-                            <button class="btn btn-sm btn-outline-primary mb-2" id="shareBtn">Gerar Link de Partilha</button>
-                            <div id="shareLinks" class="mb-2"></div>
-                            <button class="btn btn-sm btn-outline-danger mb-2" id="deleteBtn">Eliminar Conta</button>
+                        <!-- Always show account actions for any authenticated user, including admin -->
+                        <button class="btn btn-sm btn-outline-success mb-2" id="exportBtn">Exportar Coleção (JSON)</button>
+                        <form id="importForm" enctype="multipart/form-data" style="display:inline-block;width:100%">
+                            <input type="file" name="file" accept="application/json" class="form-control mb-2" required>
+                            <button type="submit" class="btn btn-sm btn-outline-success mb-2 w-100">Importar Coleção</button>
+                        </form>
+                        <button class="btn btn-sm btn-outline-primary mb-2" id="shareBtn">Gerar Link de Partilha</button>
+                        <div id="shareLinks" class="mb-2"></div>
+                        <button class="btn btn-sm btn-outline-danger mb-2" id="deleteBtn">Eliminar Conta</button>
                     <script>
                     // Export collection
                     document.getElementById('exportBtn').onclick = function() {

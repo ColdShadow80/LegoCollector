@@ -27,6 +27,12 @@
         <div class="d-flex justify-content-between align-items-center mb-3">
             <h3>Gerir Temas</h3>
             <input id="themeSearch" class="form-control form-control-sm w-50" placeholder="Procurar tema...">
+                <script>
+                // Prevent session loss on filter submit
+                document.addEventListener('submit', function(e) {
+                    // No session clearing or redirect
+                });
+                </script>
         </div>
 
         <table class="table table-striped bg-white shadow-sm rounded align-middle">

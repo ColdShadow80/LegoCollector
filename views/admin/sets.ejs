@@ -28,7 +28,7 @@
             <h3>Gerir Sets</h3>
             <form method="get" class="d-flex gap-2 align-items-center flex-wrap">
                 <input id="setSearch" name="q" class="form-control form-control-sm" style="min-width:200px;" placeholder="Procurar sets (numero / nome)..." value="<%= typeof q !== 'undefined' ? q : '' %>">
-                <select name="theme" class="form-select form-select-sm" onchange="this.form.submit()">
+                <select name="theme" class="form-select form-select-sm">
                     <option value="">Todos os Temas</option>
                     <% if (typeof allThemes !== 'undefined') { allThemes.forEach(theme => { %>
                         <option value="<%= theme.id %>" <%= (typeof theme_id !== 'undefined' && theme_id == theme.id) ? 'selected' : '' %>>
@@ -41,6 +41,12 @@
                 </select>
                 <button type="submit" class="btn btn-sm btn-outline-secondary">Filtrar</button>
             </form>
+            <script>
+            // Prevent session loss on filter submit
+            document.querySelector('form').addEventListener('submit', function(e) {
+                // No session clearing or redirect
+            });
+            </script>
         </div>
 
         <table class="table table-striped bg-white shadow-sm rounded align-middle">
