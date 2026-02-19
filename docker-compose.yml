@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  legocollector:
+    build: .
+    container_name: legocollector-app
+    ports:
+      - "3000:3000"
+    volumes:
+      # Persist database files
+      # NOTE: Run 'node setup_bulk.js' on host before first Docker run to populate database
+      - ./lego.db:/app/lego.db
+      - ./sessions.db:/app/sessions.db
+      # Persist uploads
+      - ./uploads:/app/uploads
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      # Optional: add your .env variables here
+      # - EMAIL_SERVICE=gmail
+      # - EMAIL_USER=your-email@gmail.com
+      # - EMAIL_PASS=your-app-password
+      # - GOOGLE_CLIENT_ID=your-client-id
+      # - GOOGLE_CLIENT_SECRET=your-client-secret
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000', (r) => process.exit(r.statusCode === 200 ? 0 : 1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
